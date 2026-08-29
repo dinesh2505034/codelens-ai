@@ -97,17 +97,19 @@ export default function App() {
   }, []);
 
   // Compute Step Trace whenever code or language changes
-  const runExecutionTrace = useCallback(async (codeToRun = code, langToRun = language, inputsToRun = customInputs) => {
+  const runExecutionTrace = useCallback(async (codeToRun = code, langToRun = language, inputsToRun = customInputs, startStep = 0) => {
     setIsRunning(true);
     try {
       const trace = await fetchStepTrace(codeToRun, langToRun, inputsToRun);
       setTraceData(trace);
       const steps = trace.steps || [];
       if (steps.length > 0) {
-        setCurrentStepIndex(steps.length - 1);
+        setCurrentStepIndex(Math.max(0, Math.min(startStep, steps.length - 1)));
       }
     } catch (err) {
       console.error('Failed to run trace:', err);
+    } finally {
+      setIsRunning(false);
     }
   }, [code, language, customInputs]);
 
@@ -244,10 +246,11 @@ export default function App() {
     setCurrentStepIndex(targetIdx);
   };
 
-  const handleRun = () => {
-    // Reset all entered input variables and re-run fresh
+  const handleRun = async () => {
+    // Reset all entered input variables and re-run fresh from step 0
     setCustomInputs('');
-    runExecutionTrace(code, language, '');
+    setIsPlaying(true);
+    await runExecutionTrace(code, language, '', 0);
   };
 
   const handleCustomInputChange = (newInputs) => {
@@ -341,7 +344,7 @@ export default function App() {
             onChange={handleCodeChange}
             language={language}
             activeLine={currentStep.line}
-            isRunning={isRunning}
+            isRunning={isPlaying || isRunning}
             onRun={handleRun}
             onStop={handleStop}
             errors={debugData?.issues || []}
