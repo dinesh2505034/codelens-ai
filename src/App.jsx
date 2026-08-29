@@ -6,6 +6,7 @@ import ExecutionControls from './components/ExecutionControls';
 import OutputTerminal from './components/OutputTerminal';
 import VisualStateMemory from './components/VisualStateMemory';
 import StepExplanationCard from './components/StepExplanationCard';
+import EmptyVisualizerState from './components/EmptyVisualizerState';
 import DeepExplanationModal from './components/DeepExplanationModal';
 import DebuggerPanel from './components/DebuggerPanel';
 import ImageUploadModal from './components/ImageUploadModal';
@@ -401,16 +402,16 @@ export default function App() {
               />
             </>
           ) : (
-            /* Clean Idle State until user clicks Run */
-            <div className="flex flex-col h-full bg-slate-900 dark:bg-[#12141a]">
-              <div className="flex items-center justify-between px-4 py-2.5 bg-slate-800/90 dark:bg-[#15171e] border-b border-slate-750 dark:border-dark-750 select-none">
-                <span className="text-xs font-bold text-slate-200 tracking-wide font-sans">
+            /* Clean Idle State matching reference screenshot */
+            <div className="flex flex-col h-full bg-white dark:bg-dark-900 transition-colors">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 dark:bg-dark-850 border-b border-slate-200 dark:border-dark-750 select-none">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 tracking-wide font-sans">
                   Output & Visualizer
                 </span>
                 <div className="flex items-center space-x-2 text-slate-400">
                   <button 
                     onClick={() => setIsShareOpen(true)} 
-                    className="p-1 hover:text-white transition-colors cursor-pointer" 
+                    className="p-1 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer" 
                     title="Share"
                   >
                     <Share2 className="w-4 h-4" />
@@ -418,19 +419,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none text-slate-300">
-                <div className="max-w-sm space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center mx-auto text-blue-400">
-                    <Play className="w-6 h-6 ml-0.5 fill-current" />
-                  </div>
-                  <div className="text-sm font-semibold text-slate-200">
-                    Ready to Execute
-                  </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Click <strong className="text-blue-400 font-bold">Run</strong> in the editor header to execute your code and start the interactive step-by-step visualizer.
-                  </p>
-                </div>
-              </div>
+              <EmptyVisualizerState />
             </div>
           )}
         </section>
