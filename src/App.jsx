@@ -345,7 +345,7 @@ export default function App() {
             onChange={handleCodeChange}
             language={language}
             activeLine={hasExecuted ? currentStep.line : null}
-            isRunning={hasExecuted && (isPlaying || isRunning)}
+            isRunning={hasExecuted}
             onRun={handleRun}
             onStop={handleStop}
             errors={debugData?.issues || []}
