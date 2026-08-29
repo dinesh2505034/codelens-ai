@@ -24,29 +24,94 @@ def clean_locals(f_locals):
                 locs[k] = str(v)
     return locs
 
-def explain_python_exception(exc_type, exc_val, line_code=""):
+def build_dynamic_error_diagnostic(exc_type, exc_val, line_code=""):
     msg = str(exc_val)
+    line_code = (line_code or "").strip()
+    
+    # Detect assigned variable name if present (e.g. "l = int(...)")
+    var_match = re.match(r"^([a-zA-Z_]\w*)\s*=", line_code)
+    var_name = var_match.group(1) if var_match else "the variable"
+    
     if exc_type == 'ValueError':
         int_match = re.search(r"invalid literal for int\(\) with base 10: '([^']*)'", msg)
         if int_match:
-            val = int_match.group(1)
-            return f"❌ ValueError: Invalid literal for int() - The user entered \"{val}\", but int() cannot convert non-integer text to a number. Please enter digits (e.g. 15, -42) or use str(input()) if you want to accept text."
+            entered_val = int_match.group(1)
+            summary = f"The program expects {var_name} to contain an integer because int() is used to convert the user's input into an integer. The user entered '{entered_val}', which cannot be converted to an integer. Python therefore raised a ValueError."
+            return {
+                "summary": summary,
+                "expected": f"An integer value for variable '{var_name}' (whole numbers 0-9, e.g. 4, 15, -10)",
+                "received": f"'{entered_val}'",
+                "failedOperation": f"int() conversion on statement: {line_code}",
+                "whyFailed": f"The character '{entered_val}' is an alphabetic text string and does not represent numeric digits in base 10.",
+                "exception": f"ValueError: invalid literal for int() with base 10: '{entered_val}'",
+                "howToFix": f"Enter whole digits without letters or quotes when prompted for {var_name}, or use str(input()) if you intend to accept text strings.",
+                "example": "Enter a valid integer such as 4"
+            }
+        
         float_match = re.search(r"could not convert string to float: '([^']*)'", msg)
         if float_match:
-            val = float_match.group(1)
-            return f"❌ ValueError: Cannot convert to float - The user entered \"{val}\", which is not a valid floating-point number (e.g. 3.14, 0.5)."
-        return f"❌ ValueError: {msg}"
+            entered_val = float_match.group(1)
+            summary = f"The program expects {var_name} to contain a numerical value because float() is used to convert the user's input. The user entered '{entered_val}', which cannot be converted to a float. Python therefore raised a ValueError."
+            return {
+                "summary": summary,
+                "expected": f"A floating-point or integer number for '{var_name}' (e.g. 4, 3.14, -2.5)",
+                "received": f"'{entered_val}'",
+                "failedOperation": f"float() conversion on statement: {line_code}",
+                "whyFailed": f"The string '{entered_val}' cannot be parsed as a floating-point number.",
+                "exception": f"ValueError: could not convert string to float: '{entered_val}'",
+                "howToFix": "Enter valid numeric digits (with optional decimal point).",
+                "example": "Enter a valid number such as 4 or 3.14"
+            }
+
     elif exc_type == 'ZeroDivisionError':
-        return f"❌ ZeroDivisionError: Division by zero - Attempted to divide or modulo by 0 on statement: {line_code.strip()}."
-    elif exc_type == 'TypeError':
-        return f"❌ TypeError: {msg} - Data types are incompatible for this operation."
+        summary = f"The program attempted to divide or compute modulo by zero on statement '{line_code}'. Division by zero is mathematically undefined. Python therefore raised a ZeroDivisionError."
+        return {
+            "summary": summary,
+            "expected": "A non-zero divisor (denominator != 0)",
+            "received": "0",
+            "failedOperation": f"Division or modulo operation on statement: {line_code}",
+            "whyFailed": "Dividing any number by 0 is undefined in mathematics and disallowed in Python runtime.",
+            "exception": f"ZeroDivisionError: {msg}",
+            "howToFix": "Add a conditional check (if divisor != 0:) before dividing, or ensure the divisor is non-zero.",
+            "example": "Use a non-zero denominator such as 2 or 5"
+        }
+
     elif exc_type == 'IndexError':
-        return f"❌ IndexError: {msg} - Attempted to access an index beyond the boundaries of the list."
-    elif exc_type == 'KeyError':
-        return f"❌ KeyError: Key {msg} does not exist in the dictionary."
-    elif exc_type == 'NameError':
-        return f"❌ NameError: {msg} - Variable or function is not defined."
-    return f"❌ {exc_type}: {msg}"
+        summary = f"The program attempted to access an element at an index outside the boundaries of the list on statement '{line_code}'. Python therefore raised an IndexError."
+        return {
+            "summary": summary,
+            "expected": "An index within the valid range 0 to len(list) - 1",
+            "received": "An out-of-range index",
+            "failedOperation": f"List index access on statement: {line_code}",
+            "whyFailed": msg,
+            "exception": f"IndexError: {msg}",
+            "howToFix": "Check the list length with len(list) before indexing to ensure index < len(list).",
+            "example": "Access index 0 for the first element"
+        }
+
+    elif exc_type == 'TypeError':
+        summary = f"The program performed an operation with incompatible data types on statement '{line_code}'. Python therefore raised a TypeError."
+        return {
+            "summary": summary,
+            "expected": "Matching, compatible operand data types",
+            "received": "Mismatched data types",
+            "failedOperation": line_code,
+            "whyFailed": msg,
+            "exception": f"TypeError: {msg}",
+            "howToFix": "Convert types explicitly (e.g. str(x) or int(x)) before combining them.",
+            "example": "Convert integer to string using str(val) before concatenating with text"
+        }
+
+    return {
+        "summary": f"Python encountered a {exc_type} on statement '{line_code}': {msg}",
+        "expected": "Valid executable runtime syntax and argument values",
+        "received": "Invalid runtime argument or state",
+        "failedOperation": line_code,
+        "whyFailed": msg,
+        "exception": f"{exc_type}: {msg}",
+        "howToFix": "Review the statement parameters and ensure valid arguments are supplied.",
+        "example": "Verify the syntax and input types for this statement"
+    }
 
 def run_traced_code(source_code, stdin_data=""):
     start_time = time.time()
@@ -184,7 +249,7 @@ def run_traced_code(source_code, stdin_data=""):
         
         exc_type_name = type(exc_obj).__name__ if exc_obj else "RuntimeError"
         err_line_code = lines[err_lineno - 1] if 0 < err_lineno <= len(lines) else ""
-        error_explanation = explain_python_exception(exc_type_name, exc_obj or exec_error, err_line_code)
+        diagnostic = build_dynamic_error_diagnostic(exc_type_name, exc_obj or exec_error, err_line_code)
 
         error_step = {
             "line": err_lineno,
@@ -195,7 +260,8 @@ def run_traced_code(source_code, stdin_data=""):
             "hasError": True,
             "errorType": exc_type_name,
             "errorMessage": str(exc_obj) if exc_obj else exec_error,
-            "explanation": error_explanation,
+            "explanation": diagnostic["summary"],
+            "errorDiagnostic": diagnostic,
             "statusText": f"Terminated with {exc_type_name}"
         }
         steps.append(error_step)
