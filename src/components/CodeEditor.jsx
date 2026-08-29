@@ -1,8 +1,20 @@
-import React, { useRef, useEffect } from 'react';
-import { Play, Square, Copy, Check, FileCode2, AlertCircle } from 'lucide-react';
+﻿import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Play, 
+  Square, 
+  RotateCcw, 
+  Copy, 
+  Check, 
+  FileCode2, 
+  Sparkles,
+  AlertCircle,
+  Keyboard,
+  ChevronDown,
+  ChevronUp
+} from 'lucide-react';
 
 const FONT_STYLE = {
-  fontFamily: "'Fira Code', 'JetBrains Mono', Consolas, 'Liberation Mono', Menlo, Courier, monospace",
+  fontFamily: '"Fira Code", monospace',
   fontSize: '14px',
   lineHeight: '24px',
   letterSpacing: '0px',
@@ -12,19 +24,29 @@ const FONT_STYLE = {
 export default function CodeEditor({
   code,
   onChange,
-  language,
-  activeLine,
-  isRunning,
+  language = 'python',
+  activeLine = 1,
+  isRunning = false,
   onRun,
   onStop,
-  errors = []
+  errors = [],
+  customInputs = '',
+  onChangeCustomInputs
 }) {
-  const [copied, setCopied] = React.useState(false);
-  const textareaRef = useRef(null);
-  const lineNumbersRef = useRef(null);
+  const [copied, setCopied] = useState(false);
+  const [showStdin, setShowStdin] = useState(false);
   const overlayRef = useRef(null);
+  const textareaRef = useRef(null);
 
-  const lines = (code || '').split('\n');
+  const lines = code.split('\n');
+
+  // Synchronize textarea scroll with syntax highlighter overlay
+  const handleScroll = () => {
+    if (textareaRef.current && overlayRef.current) {
+      overlayRef.current.scrollTop = textareaRef.current.scrollTop;
+      overlayRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    }
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
@@ -32,25 +54,17 @@ export default function CodeEditor({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleScroll = (e) => {
-    if (lineNumbersRef.current) {
-      lineNumbersRef.current.scrollTop = e.target.scrollTop;
-    }
-    if (overlayRef.current) {
-      overlayRef.current.scrollTop = e.target.scrollTop;
-      overlayRef.current.scrollLeft = e.target.scrollLeft;
-    }
-  };
-
   const getFileName = () => {
     switch (language) {
-      case 'python': return 'main.py';
       case 'cpp': return 'main.cpp';
       case 'c': return 'main.c';
       case 'java': return 'Main.java';
-      default: return 'script.py';
+      default: return 'main.py';
     }
   };
+
+  // Detect if code requests stdin (e.g. input(), cin >>, scanf, Scanner)
+  const hasInputStatement = /input\s*\(|cin\s*>>|scanf\s*\(|Scanner\b/i.test(code);
 
   // Syntax highlighter tokens generator
   const renderHighlightedLine = (lineStr, lineNum) => {
@@ -87,7 +101,7 @@ export default function CodeEditor({
           {lineStr.length === 0 && <span>&nbsp;</span>}
         </div>
 
-        {/* Active Line Right Indicator Badge (Absolute so it never displaces text) */}
+        {/* Active Line Right Indicator Badge */}
         {isCurrentLine && (
           <div className="absolute right-4 top-0 bottom-0 flex items-center pointer-events-none select-none">
             <span className="bg-emerald-600 dark:bg-emerald-500 text-white dark:text-dark-950 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider font-extrabold shadow-sm mr-1">
@@ -133,43 +147,38 @@ export default function CodeEditor({
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
 
-          {/* Stop Button */}
-          <button
-            onClick={onStop}
-            disabled={!isRunning}
-            className={`flex items-center space-x-1 px-3 py-1 rounded text-xs font-semibold border transition-all cursor-pointer ${
-              isRunning
-                ? 'bg-red-50 dark:bg-red-500/20 text-red-600 dark:text-red-300 border-red-200 dark:border-red-500/50 hover:bg-red-100 dark:hover:bg-red-500/30 active:scale-95'
-                : 'bg-slate-100 dark:bg-dark-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-dark-700 cursor-not-allowed opacity-60'
-            }`}
-          >
-            <Square className="w-3 h-3 fill-current" />
-            <span>Stop</span>
-          </button>
-
-          {/* Run Button */}
-          <button
-            onClick={onRun}
-            className="flex items-center space-x-1 px-4 py-1 rounded text-xs font-semibold bg-blue-600 hover:bg-blue-700 dark:bg-brand-blue dark:hover:bg-blue-500 text-white shadow-sm hover:shadow-blue-500/20 border border-blue-500 transition-all active:scale-95 cursor-pointer"
-          >
-            <Play className="w-3 h-3 fill-current" />
-            <span>Run</span>
-          </button>
+          {isRunning ? (
+            <button
+              onClick={onStop}
+              className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-red-500 hover:bg-red-600 text-white shadow-xs transition-all active:scale-95 cursor-pointer"
+            >
+              <Square className="w-3.5 h-3.5 fill-current" />
+              <span>Stop</span>
+            </button>
+          ) : (
+            <button
+              onClick={onRun}
+              className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 dark:bg-brand-blue dark:hover:bg-blue-600 text-white shadow-xs hover:shadow-blue-500/25 transition-all active:scale-95 cursor-pointer"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Run</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Editor Main Body */}
-      <div className="relative flex-1 flex overflow-hidden bg-white dark:bg-dark-950 font-mono transition-colors">
-        {/* Line Numbers Gutter */}
+      {/* Editor Body */}
+      <div className="relative flex-1 flex overflow-hidden">
+        {/* Line Number Gutter */}
         <div 
-          ref={lineNumbersRef}
           style={{ paddingTop: '12px', paddingBottom: '12px' }}
-          className="w-12 bg-slate-50 dark:bg-dark-900 border-r border-slate-200 dark:border-dark-750/70 select-none overflow-hidden text-right pr-3 font-mono"
+          className="w-12 bg-slate-50/80 dark:bg-dark-950/60 border-r border-slate-200/80 dark:border-dark-800 text-right pr-3 select-none flex flex-col pointer-events-none"
         >
           {lines.map((_, idx) => {
             const lineNum = idx + 1;
             const isCurrent = activeLine === lineNum;
             const hasError = errors.some(e => e.line === lineNum);
+
             return (
               <div 
                 key={idx} 
@@ -225,6 +234,47 @@ export default function CodeEditor({
             className="relative z-10 w-full h-full bg-transparent resize-none focus:outline-none overflow-auto whitespace-pre selection:bg-blue-500/25 selection:text-transparent"
           />
         </div>
+      </div>
+
+      {/* Collapsible Custom Input (stdin) Drawer */}
+      <div className="border-t border-slate-200 dark:border-dark-750 bg-slate-50 dark:bg-dark-850 select-none">
+        <div 
+          onClick={() => setShowStdin(!showStdin)}
+          className="px-3 py-1.5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-800 transition-colors cursor-pointer"
+        >
+          <div className="flex items-center space-x-2">
+            <Keyboard className="w-3.5 h-3.5 text-blue-600 dark:text-brand-cyan" />
+            <span>Custom Input (stdin)</span>
+            {hasInputStatement && (
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 animate-pulse">
+                Input Required
+              </span>
+            )}
+            {customInputs && (
+              <span className="text-[10px] text-slate-400 font-mono">
+                ({customInputs.split('\n').filter(Boolean).length} values)
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-1 text-slate-400">
+            <span className="text-[11px] font-normal">{showStdin ? 'Collapse' : 'Expand'}</span>
+            {showStdin ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+          </div>
+        </div>
+
+        {/* Expandable Stdin Textarea */}
+        {showStdin && (
+          <div className="p-2.5 pt-0">
+            <textarea
+              value={customInputs}
+              onChange={(e) => onChangeCustomInputs && onChangeCustomInputs(e.target.value)}
+              placeholder="Enter user inputs line by line (one value per line for each input() / cin >> call)..."
+              rows={3}
+              className="w-full p-2 rounded-lg bg-white dark:bg-dark-950 border border-slate-200 dark:border-dark-700 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500 dark:focus:border-brand-cyan resize-none leading-5 select-text"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

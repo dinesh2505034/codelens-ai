@@ -1,4 +1,4 @@
-﻿import { spawnSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -19,7 +19,7 @@ export function generateStepTrace(code, language = 'python', customInputs = '') 
 
   // 1. If Python, run directly in native Python runtime
   if (lang === 'python') {
-    const realTrace = runRealPythonTrace(code);
+    const realTrace = runRealPythonTrace(code, customInputs);
     if (realTrace && realTrace.steps && realTrace.steps.length > 0) {
       return enrichTraceSteps(realTrace.steps, rawLines, lang, realTrace);
     }
@@ -48,11 +48,12 @@ export function generateStepTrace(code, language = 'python', customInputs = '') 
 // Real Native Python Execution Engine
 // ----------------------------------------------------
 
-function runRealPythonTrace(code) {
+function runRealPythonTrace(code, customInputs = '') {
   try {
     const tracerPath = path.join(__dirname, 'pythonTracer.py');
+    const payload = JSON.stringify({ code, customInputs: customInputs || '' });
     const proc = spawnSync('python', [tracerPath], {
-      input: code,
+      input: payload,
       encoding: 'utf8',
       timeout: 4000,
       maxBuffer: 10 * 1024 * 1024

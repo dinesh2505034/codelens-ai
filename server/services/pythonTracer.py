@@ -4,7 +4,7 @@ import io
 import time
 import traceback
 
-def run_traced_code(source_code):
+def run_traced_code(source_code, stdin_data=""):
     start_time = time.time()
     steps = []
     output_buffer = io.StringIO()
@@ -17,7 +17,10 @@ def run_traced_code(source_code):
             pass
 
     old_stdout = sys.stdout
+    old_stdin = sys.stdin
+    
     sys.stdout = InterceptStdout()
+    sys.stdin = io.StringIO(stdin_data or "")
 
     def trace_lines(frame, event, arg):
         if event == 'line' and frame.f_code.co_filename == '<user_code>':
@@ -30,7 +33,6 @@ def run_traced_code(source_code):
                 if not k.startswith('_') and k != 'math':
                     try:
                         if isinstance(v, int):
-                            # Preserve large integers as strings so JSON/JS doesn't convert them to scientific float
                             if abs(v) > 9007199254740991:
                                 locs[k] = str(v)
                             else:
@@ -60,6 +62,7 @@ def run_traced_code(source_code):
 
     if parse_error:
         sys.stdout = old_stdout
+        sys.stdin = old_stdin
         elapsed = time.time() - start_time
         return {
             "error": "SyntaxError",
@@ -83,11 +86,14 @@ def run_traced_code(source_code):
     exec_error = None
     try:
         exec(compiled_code, global_scope)
+    except EOFError:
+        exec_error = "EOFError: Code requested user input via input(), but the input stream was empty. Please provide test input in the 'Custom Input (stdin)' panel."
     except Exception as e:
         exec_error = traceback.format_exc()
     finally:
         sys.settrace(None)
         sys.stdout = old_stdout
+        sys.stdin = old_stdin
 
     elapsed = time.time() - start_time
     raw_stdout = output_buffer.getvalue()
@@ -115,10 +121,14 @@ def run_traced_code(source_code):
     }
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        code_input = sys.argv[1]
-    else:
-        code_input = sys.stdin.read()
+    stdin_input = sys.stdin.read()
+    try:
+        data = json.loads(stdin_input)
+        code = data.get("code", "")
+        custom_input = data.get("customInputs", "")
+    except:
+        code = stdin_input
+        custom_input = ""
     
-    result = run_traced_code(code_input)
+    result = run_traced_code(code, custom_input)
     print(json.dumps(result))

@@ -24,6 +24,7 @@ export default function App() {
   const [language, setLanguage] = useState('python');
   const [code, setCode] = useState(defaultPreset.code);
   const [activePreset, setActivePreset] = useState(defaultPreset.id);
+  const [customInputs, setCustomInputs] = useState('');
 
   // Theme state: Default to 'light' as requested by user, with toggle support
   const [theme, setTheme] = useState(() => localStorage.getItem('omnicode_theme') || 'light');
@@ -96,10 +97,10 @@ export default function App() {
   }, []);
 
   // Compute Step Trace whenever code or language changes
-  const runExecutionTrace = useCallback(async (codeToRun = code, langToRun = language) => {
+  const runExecutionTrace = useCallback(async (codeToRun = code, langToRun = language, inputsToRun = customInputs) => {
     setIsRunning(true);
     try {
-      const trace = await fetchStepTrace(codeToRun, langToRun);
+      const trace = await fetchStepTrace(codeToRun, langToRun, inputsToRun);
       setTraceData(trace);
       const steps = trace.steps || [];
       if (steps.length > 0) {
@@ -108,7 +109,7 @@ export default function App() {
     } catch (err) {
       console.error('Failed to run trace:', err);
     }
-  }, [code, language]);
+  }, [code, language, customInputs]);
 
   // Initial trace run on mount
   useEffect(() => {
@@ -328,6 +329,8 @@ export default function App() {
             onRun={handleRun}
             onStop={handleStop}
             errors={debugData?.issues || []}
+            customInputs={customInputs}
+            onChangeCustomInputs={setCustomInputs}
           />
         </section>
 
