@@ -90,9 +90,7 @@ function enrichTraceSteps(rawSteps, rawLines, lang, meta = {}, customInputs = ''
     }
     
     // Generate human-like contextual explanation
-    let explanation = (step.hasError && step.explanation) 
-      ? step.explanation 
-      : generateRichExplanation(lineCode, currentVars, prevVars, changedVar, customInputs, step.isWaitingForInput);
+    let explanation = generateRichExplanation(lineCode, currentVars, prevVars, changedVar, customInputs, step.isWaitingForInput);
 
     prevVars = { ...currentVars };
 
@@ -108,14 +106,14 @@ function enrichTraceSteps(rawSteps, rawLines, lang, meta = {}, customInputs = ''
       isWaitingForInput: step.isWaitingForInput || false,
       inputPrompt: step.inputPrompt || '',
       compilerOutput: meta.compilerOutput || step.output,
-      explanation,
       hasError: step.hasError || false,
       errorType: step.errorType || null,
       errorMessage: step.errorMessage || null,
       errorDiagnostic: step.errorDiagnostic || null,
+      explanation: step.errorDiagnostic?.summary || step.explanation || explanation,
       statusText: step.statusText || (step.isWaitingForInput 
         ? 'Waiting for user input...' 
-        : (idx + 1 === totalSteps ? 'All steps executed.' : `Step ${idx + 1} of ${totalSteps} executed.`))
+        : (idx + 1 === totalSteps ? (step.hasError ? `Terminated with ${step.errorType || 'Error'}` : 'All steps executed.') : `Step ${idx + 1} of ${totalSteps} executed.`))
     };
   });
 

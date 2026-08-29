@@ -399,7 +399,7 @@ export default function App() {
                 currentStep={currentStepIndex + 1}
                 totalSteps={totalSteps}
                 hasError={currentStep.hasError}
-                errorDiagnostic={currentStep.errorDiagnostic}
+                errorDiagnostic={currentStep.errorDiagnostic || null}
               />
             </>
           ) : (
