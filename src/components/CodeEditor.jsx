@@ -10,7 +10,8 @@ import {
   AlertCircle,
   Keyboard,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Sliders
 } from 'lucide-react';
 
 const FONT_STYLE = {
@@ -34,11 +35,21 @@ export default function CodeEditor({
   onChangeCustomInputs
 }) {
   const [copied, setCopied] = useState(false);
-  const [showStdin, setShowStdin] = useState(false);
+  const [showStdin, setShowStdin] = useState(true); // Open by default for easy access
   const overlayRef = useRef(null);
   const textareaRef = useRef(null);
 
   const lines = code.split('\n');
+
+  // Detect if code requests stdin (e.g. input(), cin >>, scanf, Scanner)
+  const hasInputStatement = /input\s*\(|cin\s*>>|scanf\s*\(|Scanner\b|sys\.stdin/i.test(code);
+
+  // Auto-open stdin drawer if input statement is detected
+  useEffect(() => {
+    if (hasInputStatement) {
+      setShowStdin(true);
+    }
+  }, [hasInputStatement]);
 
   // Synchronize textarea scroll with syntax highlighter overlay
   const handleScroll = () => {
@@ -62,9 +73,6 @@ export default function CodeEditor({
       default: return 'main.py';
     }
   };
-
-  // Detect if code requests stdin (e.g. input(), cin >>, scanf, Scanner)
-  const hasInputStatement = /input\s*\(|cin\s*>>|scanf\s*\(|Scanner\b/i.test(code);
 
   // Syntax highlighter tokens generator
   const renderHighlightedLine = (lineStr, lineNum) => {
@@ -137,8 +145,26 @@ export default function CodeEditor({
           <span className="text-xs text-slate-500 font-mono">({lines.length} lines)</span>
         </div>
 
-        {/* Action Buttons: Stop & Run */}
+        {/* Action Buttons: Stdin Toggle, Copy, Stop, Run */}
         <div className="flex items-center space-x-2">
+          {/* Custom Input Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setShowStdin(!showStdin)}
+            className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+              showStdin 
+                ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-cyan-300 border-blue-300 dark:border-cyan-500/40' 
+                : 'bg-slate-100 dark:bg-dark-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-dark-700 hover:bg-slate-200 dark:hover:bg-dark-750'
+            }`}
+            title="Toggle Custom Input (stdin)"
+          >
+            <Keyboard className="w-3.5 h-3.5 text-blue-600 dark:text-cyan-400" />
+            <span>Stdin</span>
+            {hasInputStatement && (
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping ml-0.5"></span>
+            )}
+          </button>
+
           <button
             onClick={handleCopy}
             className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-dark-750 transition-colors cursor-pointer"
@@ -236,46 +262,43 @@ export default function CodeEditor({
         </div>
       </div>
 
-      {/* Collapsible Custom Input (stdin) Drawer */}
-      <div className="border-t border-slate-200 dark:border-dark-750 bg-slate-50 dark:bg-dark-850 select-none">
-        <div 
-          onClick={() => setShowStdin(!showStdin)}
-          className="px-3 py-1.5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-800 transition-colors cursor-pointer"
-        >
-          <div className="flex items-center space-x-2">
-            <Keyboard className="w-3.5 h-3.5 text-blue-600 dark:text-brand-cyan" />
-            <span>Custom Input (stdin)</span>
-            {hasInputStatement && (
-              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 animate-pulse">
-                Input Required
+      {/* Prominent Custom Input (stdin) Panel */}
+      {showStdin && (
+        <div className="border-t border-slate-200 dark:border-dark-750 bg-slate-50 dark:bg-dark-850 p-3 select-none flex flex-col space-y-1.5 transition-all">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Keyboard className="w-4 h-4 text-blue-600 dark:text-brand-cyan" />
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Custom User Input (stdin)
               </span>
-            )}
-            {customInputs && (
-              <span className="text-[10px] text-slate-400 font-mono">
-                ({customInputs.split('\n').filter(Boolean).length} values)
-              </span>
-            )}
+              {hasInputStatement && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40">
+                  Input Required
+                </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowStdin(false)}
+              className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+            >
+              Hide
+            </button>
           </div>
 
-          <div className="flex items-center space-x-1 text-slate-400">
-            <span className="text-[11px] font-normal">{showStdin ? 'Collapse' : 'Expand'}</span>
-            {showStdin ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-          </div>
+          <textarea
+            value={customInputs}
+            onChange={(e) => onChangeCustomInputs && onChangeCustomInputs(e.target.value)}
+            placeholder="Type your inputs here (one value per line for each input(), cin, or scanf call)..."
+            rows={2}
+            className="w-full p-2.5 rounded-xl bg-white dark:bg-dark-950 border border-slate-300 dark:border-dark-700 text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none leading-5 select-text shadow-inner"
+          />
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+            Values are automatically passed into <code className="font-mono bg-slate-200 dark:bg-dark-800 px-1 py-0.2 rounded text-[10px]">input()</code>, <code className="font-mono bg-slate-200 dark:bg-dark-800 px-1 py-0.2 rounded text-[10px]">cin &gt;&gt;</code>, or <code className="font-mono bg-slate-200 dark:bg-dark-800 px-1 py-0.2 rounded text-[10px]">Scanner</code> when you click <strong>Run</strong>.
+          </p>
         </div>
-
-        {/* Expandable Stdin Textarea */}
-        {showStdin && (
-          <div className="p-2.5 pt-0">
-            <textarea
-              value={customInputs}
-              onChange={(e) => onChangeCustomInputs && onChangeCustomInputs(e.target.value)}
-              placeholder="Enter user inputs line by line (one value per line for each input() / cin >> call)..."
-              rows={3}
-              className="w-full p-2 rounded-lg bg-white dark:bg-dark-950 border border-slate-200 dark:border-dark-700 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500 dark:focus:border-brand-cyan resize-none leading-5 select-text"
-            />
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

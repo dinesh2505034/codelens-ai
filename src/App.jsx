@@ -239,7 +239,11 @@ export default function App() {
   };
 
   const handleRun = () => {
-    runExecutionTrace();
+    runExecutionTrace(code, language, customInputs);
+  };
+
+  const handleCustomInputChange = (newInputs) => {
+    setCustomInputs(newInputs);
   };
 
   const handleStop = () => {
@@ -330,7 +334,7 @@ export default function App() {
             onStop={handleStop}
             errors={debugData?.issues || []}
             customInputs={customInputs}
-            onChangeCustomInputs={setCustomInputs}
+            onChangeCustomInputs={handleCustomInputChange}
           />
         </section>
 
