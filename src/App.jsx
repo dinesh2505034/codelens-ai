@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Share2 } from 'lucide-react';
 import Navbar from './components/Navbar';
 import CodeEditor from './components/CodeEditor';
@@ -397,6 +397,7 @@ export default function App() {
                 statusText={currentStep.statusText}
                 currentStep={currentStepIndex + 1}
                 totalSteps={totalSteps}
+                hasError={currentStep.hasError}
               />
             </>
           ) : (
