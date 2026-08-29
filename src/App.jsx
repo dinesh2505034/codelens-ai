@@ -263,10 +263,7 @@ export default function App() {
     setIsExplainOpen(true);
     setIsAnalyzing(true);
     try {
-      const res = await fetchDeepExplanation(code, language, {
-        apiKey,
-        useCloud: aiMode === 'cloud'
-      });
+      const res = await fetchDeepExplanation(code, language);
       setAnalysisData(res);
     } catch (err) {
       console.error('Explanation request error:', err);
@@ -310,8 +307,6 @@ export default function App() {
       <Navbar
         language={language}
         setLanguage={handleLanguageChange}
-        aiMode={aiMode}
-        setAiMode={setAiMode}
         onOpenOCR={() => setIsOCROpen(true)}
         onOpenExplain={handleOpenDeepExplain}
         onOpenDebugger={handleOpenDebugger}
@@ -412,7 +407,6 @@ export default function App() {
         isOpen={isOCROpen}
         onClose={() => setIsOCROpen(false)}
         onImportCode={handleImportOCRCode}
-        apiKey={apiKey}
       />
 
       <ShareModal
@@ -427,10 +421,8 @@ export default function App() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        aiMode={aiMode}
-        setAiMode={setAiMode}
-        apiKey={apiKey}
-        setApiKey={setApiKey}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
       />
     </div>
   );

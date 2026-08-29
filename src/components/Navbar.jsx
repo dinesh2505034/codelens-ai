@@ -6,18 +6,14 @@ import {
   Camera, 
   Share2, 
   Settings, 
-  Zap,
-  Sun,
-  Moon,
-  Eye,
-  Scan
+  Sun, 
+  Moon, 
+  Scan 
 } from 'lucide-react';
 
 export default function Navbar({
   language,
   setLanguage,
-  aiMode,
-  setAiMode,
   onOpenOCR,
   onOpenExplain,
   onOpenDebugger,
@@ -37,9 +33,8 @@ export default function Navbar({
 
   return (
     <header className="bg-white dark:bg-dark-900 border-b border-slate-200 dark:border-dark-750 px-4 py-2.5 flex items-center justify-between shadow-xs select-none sticky top-0 z-30 transition-colors">
-      {/* Brand & AI Engine */}
+      {/* Brand Logo */}
       <div className="flex items-center space-x-3">
-        {/* Custom CodeLens Crystal Lens Logo */}
         <div className="flex items-center space-x-2 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-cyan-500/10 dark:from-cyan-500/15 dark:via-blue-500/15 dark:to-indigo-500/15 border border-blue-200 dark:border-cyan-500/30 px-3 py-1.5 rounded-xl shadow-xs">
           <div className="relative flex items-center justify-center">
             {/* Crystal Lens Icon Graphic */}
@@ -59,34 +54,6 @@ export default function Navbar({
           <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-transparent dark:bg-gradient-to-r dark:from-cyan-400 dark:via-white dark:to-blue-400 dark:bg-clip-text">
             CodeLens <span className="text-[11px] font-black uppercase text-blue-700 dark:text-cyan-300 bg-blue-100 dark:bg-dark-950 px-1.5 py-0.5 rounded-md border border-blue-200 dark:border-cyan-500/30 ml-0.5 tracking-wider">AI</span>
           </span>
-        </div>
-
-        {/* AI Engine Switcher */}
-        <div className="hidden md:flex items-center bg-slate-100 dark:bg-dark-950 border border-slate-200 dark:border-dark-750 rounded-lg p-0.5 text-xs">
-          <button
-            onClick={() => setAiMode('native')}
-            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md transition-all font-medium cursor-pointer ${
-              aiMode === 'native'
-                ? 'bg-blue-600 dark:bg-brand-blue text-white shadow-xs font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-            title="Fast built-in AST semantic code explanation & visual generator"
-          >
-            <Eye className="w-3.5 h-3.5 text-cyan-300" />
-            <span>CodeLens Native</span>
-          </button>
-          <button
-            onClick={() => setAiMode('cloud')}
-            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md transition-all font-medium cursor-pointer ${
-              aiMode === 'cloud'
-                ? 'bg-purple-600 text-white shadow-xs font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-            title="Google Gemini Cloud AI"
-          >
-            <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-            <span>Cloud Gemini</span>
-          </button>
         </div>
       </div>
 
@@ -178,7 +145,7 @@ export default function Navbar({
         <button
           onClick={onOpenSettings}
           className="p-1.5 rounded-lg bg-slate-100 dark:bg-dark-850 hover:bg-slate-200 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-dark-750 transition-all cursor-pointer"
-          title="Settings & API Key"
+          title="Settings"
         >
           <Settings className="w-4 h-4" />
         </button>

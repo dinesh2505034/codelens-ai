@@ -6,7 +6,6 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { generateStepTrace } from './services/universalTraceEngine.js';
 import { analyzeCode, detectAndFixErrors } from './services/omniCodeAI.js';
-import { explainWithGemini, extractCodeFromImageGemini } from './services/geminiService.js';
 import { extractCodeWithTesseract } from './services/ocrService.js';
 import { saveShareSession, getShareSession } from './services/shareStore.js';
 
@@ -24,7 +23,11 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Multer in-memory storage for image upload
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 } // 25MB max
+});
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -46,25 +49,14 @@ app.post('/api/trace', (req, res) => {
   }
 });
 
-// 2. Deep Code Explanation & Complexity
-app.post('/api/explain', async (req, res) => {
+// 2. Deep Code Explanation & Complexity (CodeLens Native AI)
+app.post('/api/explain', (req, res) => {
   try {
-    const { code, language, apiKey, useCloud } = req.body;
+    const { code, language } = req.body;
     if (!code) {
       return res.status(400).json({ error: 'Code is required' });
     }
 
-    // If Cloud AI is requested and API key provided, attempt Gemini; else use OmniCode AI
-    if (useCloud && (apiKey || process.env.GEMINI_API_KEY)) {
-      try {
-        const geminiResult = await explainWithGemini(code, language, apiKey);
-        return res.json(geminiResult);
-      } catch (geminiErr) {
-        console.warn('Gemini cloud explain failed, falling back to OmniCode AI:', geminiErr.message);
-      }
-    }
-
-    // Native OmniCode AI Engine
     const result = analyzeCode(code, language);
     return res.json(result);
   } catch (err) {
@@ -88,24 +80,13 @@ app.post('/api/debug', (req, res) => {
   }
 });
 
-// 4. Image-to-Code OCR & Extraction
+// 4. Image-to-Code Optical Character Recognition
 app.post('/api/ocr', upload.single('image'), async (req, res) => {
   try {
     const file = req.file;
-    const { apiKey } = req.body;
 
     if (!file) {
       return res.status(400).json({ error: 'Image file is required' });
-    }
-
-    // Try Gemini Multimodal Vision if key is available
-    if (apiKey || process.env.GEMINI_API_KEY) {
-      try {
-        const result = await extractCodeFromImageGemini(file.buffer, file.mimetype, apiKey);
-        return res.json(result);
-      } catch (geminiErr) {
-        console.warn('Gemini vision OCR error, using Tesseract engine:', geminiErr.message);
-      }
     }
 
     // Built-in Optical Character Recognition & Code Syntax Restorer
