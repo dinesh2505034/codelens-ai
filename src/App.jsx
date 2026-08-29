@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Play, Share2 } from 'lucide-react';
 import Navbar from './components/Navbar';
 import CodeEditor from './components/CodeEditor';
 import ExecutionControls from './components/ExecutionControls';
@@ -26,14 +27,11 @@ export default function App() {
   const [activePreset, setActivePreset] = useState(defaultPreset.id);
   const [customInputs, setCustomInputs] = useState('');
 
-  // Theme state: Default to 'light' as requested by user, with toggle support
+  // Theme state: Default to 'light' with toggle support
   const [theme, setTheme] = useState(() => localStorage.getItem('omnicode_theme') || 'light');
 
-  // AI & Preference state
-  const [aiMode, setAiMode] = useState('native'); // 'native' | 'cloud'
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
-
   // Step Execution & Trace state
+  const [hasExecuted, setHasExecuted] = useState(false); // Only start execution when user presses Run!
   const [traceData, setTraceData] = useState(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -83,7 +81,10 @@ export default function App() {
           setCode(session.code);
           setLanguage(session.language);
           if (session.explanation) setAnalysisData(session.explanation);
-          if (session.trace) setTraceData(session.trace);
+          if (session.trace) {
+            setTraceData(session.trace);
+            setHasExecuted(true);
+          }
         }
       }).catch(console.error);
     } else if (urlCode) {
@@ -96,7 +97,7 @@ export default function App() {
     }
   }, []);
 
-  // Compute Step Trace whenever code or language changes
+  // Compute Step Trace
   const runExecutionTrace = useCallback(async (codeToRun = code, langToRun = language, inputsToRun = customInputs, startStep = 0) => {
     setIsRunning(true);
     try {
@@ -113,9 +114,8 @@ export default function App() {
     }
   }, [code, language, customInputs]);
 
-  // Initial trace run on mount
+  // Initial background debug check only (does NOT execute code on mount)
   useEffect(() => {
-    runExecutionTrace();
     runBackgroundDebugCheck(code, language);
   }, []);
 
@@ -136,9 +136,9 @@ export default function App() {
       setActivePreset(preset.id);
       setLanguage(preset.language);
       setCode(preset.code);
+      setHasExecuted(false);
       setIsPlaying(false);
       setCustomInputs('');
-      runExecutionTrace(preset.code, preset.language, '');
       runBackgroundDebugCheck(preset.code, preset.language);
     }
   };
@@ -147,24 +147,23 @@ export default function App() {
   const handleCodeChange = (newCode) => {
     setCode(newCode);
     setActivePreset('');
+    setHasExecuted(false);
     setIsPlaying(false);
     setCustomInputs('');
-    runExecutionTrace(newCode, language, '');
     runBackgroundDebugCheck(newCode, language);
   };
 
   // Handle Language changes
   const handleLanguageChange = (newLang) => {
     setLanguage(newLang);
+    setHasExecuted(false);
+    setIsPlaying(false);
     setCustomInputs('');
     const matched = SAMPLE_PRESETS.find(p => p.language === newLang);
     if (matched) {
       setActivePreset(matched.id);
       setCode(matched.code);
-      runExecutionTrace(matched.code, newLang, '');
       runBackgroundDebugCheck(matched.code, newLang);
-    } else {
-      runExecutionTrace(code, newLang, '');
     }
   };
 
@@ -179,16 +178,16 @@ export default function App() {
     changedVar: null,
     dataStructures: null,
     output: '',
-    explanation: 'Ready to execute code step-by-step.',
-    statusText: 'Press Run to start.'
+    explanation: 'Ready to execute.',
+    statusText: 'Ready'
   };
 
-  // Playback timer loop
+  // Auto-play interval timer
   useEffect(() => {
     if (isPlaying) {
-      const intervalMs = Math.max(300, 1000 / playbackSpeed);
+      const intervalMs = Math.max(200, 1500 / playbackSpeed);
       playTimerRef.current = setInterval(() => {
-        setCurrentStepIndex((prev) => {
+        setCurrentStepIndex(prev => {
           if (prev < totalSteps - 1) {
             return prev + 1;
           } else {
@@ -232,7 +231,7 @@ export default function App() {
     setIsPlaying(false);
     setCurrentStepIndex(0);
     setCustomInputs('');
-    runExecutionTrace(code, language, '');
+    runExecutionTrace(code, language, '', 0);
   };
 
   const handleFastForward = () => {
@@ -246,8 +245,9 @@ export default function App() {
     setCurrentStepIndex(targetIdx);
   };
 
+  // Explicit Run Handler: Execution ONLY starts when user clicks Run!
   const handleRun = async () => {
-    // Reset all entered input variables and re-run fresh from step 0
+    setHasExecuted(true);
     setCustomInputs('');
     setIsPlaying(true);
     await runExecutionTrace(code, language, '', 0);
@@ -260,16 +260,15 @@ export default function App() {
   const handleInteractiveSubmit = (inputVal) => {
     const updatedInputs = customInputs ? `${customInputs}\n${inputVal}` : inputVal;
     setCustomInputs(updatedInputs);
-    runExecutionTrace(code, language, updatedInputs);
+    runExecutionTrace(code, language, updatedInputs, currentStepIndex);
   };
 
   const handleStop = () => {
+    setHasExecuted(false);
     setIsPlaying(false);
     setIsRunning(false);
     setCurrentStepIndex(0);
-    // Reset all entered input variables on stop
     setCustomInputs('');
-    runExecutionTrace(code, language, '');
   };
 
   // Deep AI Explanation Trigger
@@ -286,7 +285,7 @@ export default function App() {
     }
   };
 
-  // Debugger Trigger
+  // AI Debugger Trigger
   const handleOpenDebugger = async () => {
     setIsDebuggerOpen(true);
     setIsDebugging(true);
@@ -294,30 +293,31 @@ export default function App() {
       const res = await fetchDebugAnalysis(code, language);
       setDebugData(res);
     } catch (err) {
-      console.error('Debugger request error:', err);
+      console.error('Debug analysis error:', err);
     } finally {
       setIsDebugging(false);
     }
   };
 
-  // Apply 1-Click Fix
+  // Apply Debugger 1-Click Fix
   const handleApplyFix = (fixedCode) => {
     setCode(fixedCode);
-    runExecutionTrace(fixedCode, language);
+    setIsDebuggerOpen(false);
+    setHasExecuted(false);
     runBackgroundDebugCheck(fixedCode, language);
   };
 
-  // Import OCR Code
+  // Handle OCR Imported Code
   const handleImportOCRCode = (newCode, detectedLang) => {
     setCode(newCode);
     if (detectedLang) setLanguage(detectedLang);
-    runExecutionTrace(newCode, detectedLang || language);
+    setHasExecuted(false);
     runBackgroundDebugCheck(newCode, detectedLang || language);
   };
 
   return (
     <div className="flex flex-col h-screen bg-slate-100 dark:bg-dark-950 text-slate-800 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
-      {/* Top Navbar with Theme Switcher */}
+      {/* Top Navbar */}
       <Navbar
         language={language}
         setLanguage={handleLanguageChange}
@@ -330,7 +330,7 @@ export default function App() {
         issueCount={debugData?.issues?.length || 0}
         onRunCode={handleRun}
         onResetCode={handleRewind}
-        isRunning={isRunning}
+        isRunning={hasExecuted && (isPlaying || isRunning)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
       />
@@ -343,8 +343,8 @@ export default function App() {
             code={code}
             onChange={handleCodeChange}
             language={language}
-            activeLine={currentStep.line}
-            isRunning={isPlaying || isRunning}
+            activeLine={hasExecuted ? currentStep.line : null}
+            isRunning={hasExecuted && (isPlaying || isRunning)}
             onRun={handleRun}
             onStop={handleStop}
             errors={debugData?.issues || []}
@@ -353,49 +353,85 @@ export default function App() {
 
         {/* Right Pane: Visualizer & Output */}
         <section className="h-full flex flex-col bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-750 rounded-xl overflow-hidden shadow-md dark:shadow-xl transition-colors">
-          {/* 1. Header with Execution Playback Controls */}
-          <ExecutionControls
-            currentStep={currentStepIndex + 1}
-            totalSteps={totalSteps}
-            isPlaying={isPlaying}
-            onTogglePlay={handleTogglePlay}
-            onStepForward={handleStepForward}
-            onStepBackward={handleStepBackward}
-            onRewind={handleRewind}
-            onFastForward={handleFastForward}
-            onSeekStep={handleSeekStep}
-            playbackSpeed={playbackSpeed}
-            onChangeSpeed={setPlaybackSpeed}
-            onOpenShare={() => setIsShareOpen(true)}
-          />
+          {hasExecuted ? (
+            <>
+              {/* 1. Header with Execution Playback Controls */}
+              <ExecutionControls
+                currentStep={currentStepIndex + 1}
+                totalSteps={totalSteps}
+                isPlaying={isPlaying}
+                onTogglePlay={handleTogglePlay}
+                onStepForward={handleStepForward}
+                onStepBackward={handleStepBackward}
+                onRewind={handleRewind}
+                onFastForward={handleFastForward}
+                onSeekStep={handleSeekStep}
+                playbackSpeed={playbackSpeed}
+                onChangeSpeed={setPlaybackSpeed}
+                onOpenShare={() => setIsShareOpen(true)}
+              />
 
-          {/* 2. Output Terminal Box */}
-          <OutputTerminal 
-            output={currentStep.output}
-            isWaitingForInput={currentStep.isWaitingForInput || traceData?.isWaitingForInput}
-            inputPrompt={currentStep.inputPrompt || traceData?.inputPrompt || '>'}
-            onSubmitInput={handleInteractiveSubmit}
-            executionTime={traceData?.executionTime || '0.015s'}
-            exitCode={traceData?.exitCode || 0}
-          />
+              {/* 2. Output Terminal Box */}
+              <OutputTerminal 
+                output={currentStep.output}
+                isWaitingForInput={currentStep.isWaitingForInput || traceData?.isWaitingForInput}
+                inputPrompt={currentStep.inputPrompt || traceData?.inputPrompt || '>'}
+                onSubmitInput={handleInteractiveSubmit}
+                executionTime={traceData?.executionTime || '0.015s'}
+                exitCode={traceData?.exitCode || 0}
+              />
 
-          {/* 3. Visual State & Memory Box */}
-          <VisualStateMemory
-            variables={currentStep.variables}
-            changedVar={currentStep.changedVar}
-            callStack={currentStep.callStack}
-            dataStructures={currentStep.dataStructures}
-          />
+              {/* 3. Visual State & Memory Box */}
+              <VisualStateMemory
+                variables={currentStep.variables}
+                changedVar={currentStep.changedVar}
+                callStack={currentStep.callStack}
+                dataStructures={currentStep.dataStructures}
+              />
 
-          {/* 4. Explanation Card */}
-          <StepExplanationCard
-            activeLine={currentStep.line}
-            lineCode={currentStep.lineCode}
-            explanation={currentStep.explanation}
-            statusText={currentStep.statusText}
-            currentStep={currentStepIndex + 1}
-            totalSteps={totalSteps}
-          />
+              {/* 4. Explanation Card */}
+              <StepExplanationCard
+                activeLine={currentStep.line}
+                lineCode={currentStep.lineCode}
+                explanation={currentStep.explanation}
+                statusText={currentStep.statusText}
+                currentStep={currentStepIndex + 1}
+                totalSteps={totalSteps}
+              />
+            </>
+          ) : (
+            /* Clean Idle State until user clicks Run */
+            <div className="flex flex-col h-full bg-slate-900 dark:bg-[#12141a]">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-slate-800/90 dark:bg-[#15171e] border-b border-slate-750 dark:border-dark-750 select-none">
+                <span className="text-xs font-bold text-slate-200 tracking-wide font-sans">
+                  Output & Visualizer
+                </span>
+                <div className="flex items-center space-x-2 text-slate-400">
+                  <button 
+                    onClick={() => setIsShareOpen(true)} 
+                    className="p-1 hover:text-white transition-colors cursor-pointer" 
+                    title="Share"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none text-slate-300">
+                <div className="max-w-sm space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center mx-auto text-blue-400">
+                    <Play className="w-6 h-6 ml-0.5 fill-current" />
+                  </div>
+                  <div className="text-sm font-semibold text-slate-200">
+                    Ready to Execute
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Click <strong className="text-blue-400 font-bold">Run</strong> in the editor header to execute your code and start the interactive step-by-step visualizer.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
       </main>
 
