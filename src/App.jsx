@@ -339,8 +339,6 @@ export default function App() {
             onRun={handleRun}
             onStop={handleStop}
             errors={debugData?.issues || []}
-            customInputs={customInputs}
-            onChangeCustomInputs={handleCustomInputChange}
           />
         </section>
 
