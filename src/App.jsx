@@ -135,7 +135,8 @@ export default function App() {
       setLanguage(preset.language);
       setCode(preset.code);
       setIsPlaying(false);
-      runExecutionTrace(preset.code, preset.language);
+      setCustomInputs('');
+      runExecutionTrace(preset.code, preset.language, '');
       runBackgroundDebugCheck(preset.code, preset.language);
     }
   };
@@ -145,20 +146,23 @@ export default function App() {
     setCode(newCode);
     setActivePreset('');
     setIsPlaying(false);
+    setCustomInputs('');
+    runExecutionTrace(newCode, language, '');
     runBackgroundDebugCheck(newCode, language);
   };
 
   // Handle Language changes
   const handleLanguageChange = (newLang) => {
     setLanguage(newLang);
+    setCustomInputs('');
     const matched = SAMPLE_PRESETS.find(p => p.language === newLang);
     if (matched) {
       setActivePreset(matched.id);
       setCode(matched.code);
-      runExecutionTrace(matched.code, newLang);
+      runExecutionTrace(matched.code, newLang, '');
       runBackgroundDebugCheck(matched.code, newLang);
     } else {
-      runExecutionTrace(code, newLang);
+      runExecutionTrace(code, newLang, '');
     }
   };
 
@@ -225,6 +229,8 @@ export default function App() {
   const handleRewind = () => {
     setIsPlaying(false);
     setCurrentStepIndex(0);
+    setCustomInputs('');
+    runExecutionTrace(code, language, '');
   };
 
   const handleFastForward = () => {
@@ -239,7 +245,9 @@ export default function App() {
   };
 
   const handleRun = () => {
-    runExecutionTrace(code, language, customInputs);
+    // Reset all entered input variables and re-run fresh
+    setCustomInputs('');
+    runExecutionTrace(code, language, '');
   };
 
   const handleCustomInputChange = (newInputs) => {
@@ -254,8 +262,11 @@ export default function App() {
 
   const handleStop = () => {
     setIsPlaying(false);
-    setCurrentStepIndex(0);
     setIsRunning(false);
+    setCurrentStepIndex(0);
+    // Reset all entered input variables on stop
+    setCustomInputs('');
+    runExecutionTrace(code, language, '');
   };
 
   // Deep AI Explanation Trigger
