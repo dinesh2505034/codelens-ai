@@ -5,9 +5,28 @@ import time
 import builtins
 import traceback
 
+def clean_locals(f_locals):
+    locs = {}
+    for k, v in f_locals.items():
+        if not k.startswith('_') and k != 'math':
+            try:
+                if isinstance(v, int):
+                    if abs(v) > 9007199254740991:
+                        locs[k] = str(v)
+                    else:
+                        locs[k] = v
+                elif isinstance(v, (float, bool, str, list, dict, set, tuple)):
+                    locs[k] = v
+                else:
+                    locs[k] = repr(v)
+            except:
+                locs[k] = str(v)
+    return locs
+
 def run_traced_code(source_code, stdin_data=""):
     start_time = time.time()
     steps = []
+    pending_step = None
     output_buffer = io.StringIO()
     lines = source_code.splitlines()
 
@@ -42,34 +61,30 @@ def run_traced_code(source_code, stdin_data=""):
     builtins.input = custom_input
 
     def trace_lines(frame, event, arg):
-        if event == 'line' and frame.f_code.co_filename == '<user_code>':
-            lineno = frame.f_lineno
-            line_content = lines[lineno - 1] if 0 < lineno <= len(lines) else ""
-            
-            # Extract clean serializable locals
-            locs = {}
-            for k, v in frame.f_locals.items():
-                if not k.startswith('_') and k != 'math':
-                    try:
-                        if isinstance(v, int):
-                            if abs(v) > 9007199254740991:
-                                locs[k] = str(v)
-                            else:
-                                locs[k] = v
-                        elif isinstance(v, (float, bool, str, list, dict, set, tuple)):
-                            locs[k] = v
-                        else:
-                            locs[k] = repr(v)
-                    except:
-                        locs[k] = str(v)
+        nonlocal pending_step
+        if frame.f_code.co_filename == '<user_code>':
+            if event == 'line':
+                # Finalize the previous step with the post-execution variables & output
+                if pending_step is not None:
+                    pending_step['variables'] = clean_locals(frame.f_locals)
+                    pending_step['output'] = output_buffer.getvalue()
+                    steps.append(pending_step)
 
-            steps.append({
-                "line": lineno,
-                "lineCode": line_content,
-                "variables": locs,
-                "callStack": [{"frameName": frame.f_code.co_name if frame.f_code.co_name != '<module>' else 'Main Block', "line": lineno}],
-                "output": output_buffer.getvalue()
-            })
+                lineno = frame.f_lineno
+                line_content = lines[lineno - 1] if 0 < lineno <= len(lines) else ""
+                pending_step = {
+                    "line": lineno,
+                    "lineCode": line_content,
+                    "variables": clean_locals(frame.f_locals),
+                    "callStack": [{"frameName": frame.f_code.co_name if frame.f_code.co_name != '<module>' else 'Main Block', "line": lineno}],
+                    "output": output_buffer.getvalue()
+                }
+            elif event == 'return':
+                if pending_step is not None:
+                    pending_step['variables'] = clean_locals(frame.f_locals)
+                    pending_step['output'] = output_buffer.getvalue()
+                    steps.append(pending_step)
+                    pending_step = None
         return trace_lines
 
     compiled_code = None
@@ -117,6 +132,12 @@ def run_traced_code(source_code, stdin_data=""):
         sys.stdout = old_stdout
         builtins.input = old_input
 
+    # Ensure last pending step is captured if not already appended
+    if not waiting_input["is_waiting"] and pending_step is not None:
+        pending_step['output'] = output_buffer.getvalue()
+        steps.append(pending_step)
+        pending_step = None
+
     elapsed = time.time() - start_time
     raw_stdout = output_buffer.getvalue()
     
@@ -130,10 +151,9 @@ def run_traced_code(source_code, stdin_data=""):
     compiler_banner = f"[Running] python -u \"main.py\"\n{full_output.rstrip()}\n\n[Done] exited with code={exit_code} in {elapsed:.3f} seconds"
 
     if waiting_input["is_waiting"]:
-        current_line = steps[-1]["line"] if steps else 1
+        current_line = pending_step["line"] if pending_step else (steps[-1]["line"] if steps else 1)
         current_code = lines[current_line - 1] if 0 < current_line <= len(lines) else ""
         
-        # If waiting for input, add/update the waiting step
         waiting_step = {
             "line": current_line,
             "lineCode": current_code,
@@ -144,9 +164,6 @@ def run_traced_code(source_code, stdin_data=""):
             "inputPrompt": waiting_input["prompt"] or "Enter input:"
         }
         steps = [waiting_step]
-
-    elif steps:
-        steps[-1]["output"] = full_output.rstrip()
 
     return {
         "steps": steps,
