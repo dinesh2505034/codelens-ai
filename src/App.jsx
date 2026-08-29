@@ -246,6 +246,12 @@ export default function App() {
     setCustomInputs(newInputs);
   };
 
+  const handleInteractiveSubmit = (inputVal) => {
+    const updatedInputs = customInputs ? `${customInputs}\n${inputVal}` : inputVal;
+    setCustomInputs(updatedInputs);
+    runExecutionTrace(code, language, updatedInputs);
+  };
+
   const handleStop = () => {
     setIsPlaying(false);
     setCurrentStepIndex(0);
@@ -359,10 +365,11 @@ export default function App() {
           {/* 2. Output Terminal Box */}
           <OutputTerminal 
             output={currentStep.output}
-            compilerOutput={traceData?.compilerOutput || currentStep.output}
+            isWaitingForInput={currentStep.isWaitingForInput || traceData?.isWaitingForInput}
+            inputPrompt={currentStep.inputPrompt || traceData?.inputPrompt || '>'}
+            onSubmitInput={handleInteractiveSubmit}
+            executionTime={traceData?.executionTime || '0.015s'}
             exitCode={traceData?.exitCode || 0}
-            executionTime={traceData?.executionTime || '0.018s'}
-            language={language}
           />
 
           {/* 3. Visual State & Memory Box */}

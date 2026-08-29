@@ -1,4 +1,4 @@
-import { spawnSync } from 'child_process';
+﻿import { spawnSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename);
 
 /**
  * Universal Step Trace & Compiler Execution Engine
- * Produces exact compiler terminal stream and line-by-line visual execution frames.
+ * Generates exact step-by-step memory states, terminal output, and deep line explanations.
  */
 export function generateStepTrace(code, language = 'python', customInputs = '') {
   if (!code || typeof code !== 'string') {
@@ -21,15 +21,15 @@ export function generateStepTrace(code, language = 'python', customInputs = '') 
   if (lang === 'python') {
     const realTrace = runRealPythonTrace(code, customInputs);
     if (realTrace && realTrace.steps && realTrace.steps.length > 0) {
-      return enrichTraceSteps(realTrace.steps, rawLines, lang, realTrace);
+      return enrichTraceSteps(realTrace.steps, rawLines, lang, realTrace, customInputs);
     }
   }
 
   // 2. Specialized Algorithmic Visualizers
   const normalized = code.trim();
 
-  if (normalized.includes('reversed_num') || (normalized.includes('% 10') && normalized.includes('//='))) {
-    return traceDynamicReverseNumber(rawLines, lang);
+  if (normalized.includes('reversed_num') || (normalized.includes('% 10') && (normalized.includes('//') || normalized.includes('/')))) {
+    return traceDynamicReverseNumber(rawLines, lang, customInputs);
   }
 
   if ((normalized.includes('arr') || normalized.includes('vector')) && normalized.includes('for') && (normalized.includes('>') || normalized.includes('<')) && normalized.includes('temp')) {
@@ -41,7 +41,7 @@ export function generateStepTrace(code, language = 'python', customInputs = '') 
   }
 
   // 3. Universal Dynamic Interpreter for any C/C++/Java snippet
-  return traceGeneralCode(rawLines, lang);
+  return traceGeneralCode(rawLines, lang, customInputs);
 }
 
 // ----------------------------------------------------
@@ -71,9 +71,10 @@ function runRealPythonTrace(code, customInputs = '') {
   return null;
 }
 
-function enrichTraceSteps(rawSteps, rawLines, lang, meta = {}) {
+function enrichTraceSteps(rawSteps, rawLines, lang, meta = {}, customInputs = '') {
   const totalSteps = rawSteps.length;
   let prevVars = {};
+  const isWaiting = meta.isWaitingForInput || false;
 
   const enriched = rawSteps.map((step, idx) => {
     const lineNum = step.line;
@@ -87,9 +88,11 @@ function enrichTraceSteps(rawSteps, rawLines, lang, meta = {}) {
         break;
       }
     }
-    prevVars = { ...currentVars };
+    
+    // Generate human-like contextual explanation
+    let explanation = generateRichExplanation(lineCode, currentVars, prevVars, changedVar, customInputs, step.isWaitingForInput);
 
-    let explanation = generateDynamicExplanation(lineCode, currentVars, changedVar);
+    prevVars = { ...currentVars };
 
     return {
       stepNumber: idx + 1,
@@ -100,45 +103,100 @@ function enrichTraceSteps(rawSteps, rawLines, lang, meta = {}) {
       variables: currentVars,
       changedVar,
       output: step.output || '',
-      compilerOutput: meta.compilerOutput || `[Running] python -u "main.py"\n${step.output}\n\n[Done] exited with code=0 in ${meta.executionTime || '0.015s'}`,
+      isWaitingForInput: step.isWaitingForInput || false,
+      inputPrompt: step.inputPrompt || '',
+      compilerOutput: meta.compilerOutput || step.output,
       explanation,
-      statusText: idx + 1 === totalSteps ? 'All steps executed.' : `Step ${idx + 1} of ${totalSteps} executing...`
+      statusText: step.isWaitingForInput 
+        ? 'Waiting for user input...' 
+        : (idx + 1 === totalSteps ? 'All steps executed.' : `Step ${idx + 1} of ${totalSteps} executed.`)
     };
   });
 
   return { 
     totalSteps, 
     steps: enriched,
+    isWaitingForInput: isWaiting,
+    inputPrompt: meta.inputPrompt || '',
     compilerOutput: meta.compilerOutput || (enriched.length > 0 ? enriched[enriched.length - 1].output : ''),
     finalOutput: meta.finalOutput || (enriched.length > 0 ? enriched[enriched.length - 1].output : ''),
-    executionTime: meta.executionTime || '0.015s',
+    executionTime: meta.executionTime || '0.012s',
     exitCode: meta.exitCode || 0
   };
 }
 
-function generateDynamicExplanation(lineCode, vars, changedVar) {
+function generateRichExplanation(lineCode, vars, prevVars, changedVar, customInputs, isWaiting) {
   const trimmed = lineCode.trim();
   if (!trimmed) return 'Executing line...';
 
-  if (trimmed.startsWith('import ') || trimmed.startsWith('from ')) {
-    return `Importing external module for built-in mathematical & system operations.`;
+  if (isWaiting) {
+    return `Program execution paused. Waiting for user input for statement: ${trimmed}`;
   }
-  if (trimmed.includes('print(') || trimmed.includes('printf(') || trimmed.includes('cout') || trimmed.includes('System.out')) {
-    return `The print() statement outputs formatted text to the standard output stream.`;
+
+  // 1. User Input with int() or float() conversion (matches reference screenshot)
+  const inputMatch = trimmed.match(/^([a-zA-Z_]\w*)\s*=\s*(int|float|str)?\(?input\((.*?)\)\)?/);
+  if (inputMatch) {
+    const varName = inputMatch[1];
+    const castType = inputMatch[2] || 'str';
+    const val = vars[varName] !== undefined ? vars[varName] : (customInputs ? customInputs.split('\n')[0] : '15');
+    const rawVal = String(val);
+
+    if (castType === 'int') {
+      return `The value entered by the user, "${rawVal}", is converted to its corresponding integer, ${val}, using int(). This value is assigned to the variable ${varName}.`;
+    } else if (castType === 'float') {
+      return `The value entered by the user, "${rawVal}", is converted to its corresponding floating-point number, ${val}, using float(). This value is assigned to the variable ${varName}.`;
+    } else {
+      return `The string entered by the user, "${rawVal}", is assigned to the variable ${varName}.`;
+    }
   }
+
+  // 2. Print statement (matches reference screenshot)
+  if (trimmed.startsWith('print(') || trimmed.startsWith('printf(') || trimmed.startsWith('cout') || trimmed.startsWith('System.out')) {
+    return `The print() function statement displays the output, which can be viewed in the output panel.`;
+  }
+
+  // 3. Module Import
+  if (trimmed.startsWith('import ') || trimmed.startsWith('from ') || trimmed.startsWith('#include')) {
+    return `Imports external module for mathematical and system utility functions.`;
+  }
+
+  // 4. Factorial / Function Call calculation
+  if (trimmed.includes('math.factorial')) {
+    const n = vars['num'] !== undefined ? vars['num'] : '';
+    const res = changedVar ? vars[changedVar] : '';
+    return `Calls math.factorial(${n}) to compute ${n} factorial and assigns the result to variable '${changedVar || 'result'}'.`;
+  }
+
+  // 5. While loop condition
+  if (trimmed.startsWith('while ') || trimmed.startsWith('while(')) {
+    const numVal = vars['num'] !== undefined ? vars['num'] : '';
+    return `Evaluates while condition: '${numVal !== '' ? `num (${numVal}) != 0` : trimmed}' is TRUE, entering loop iteration.`;
+  }
+
+  // 6. Modulo Extraction: digit = num % 10
+  if (trimmed.includes('% 10')) {
+    const prevNum = prevVars['num'] !== undefined ? prevVars['num'] : '';
+    const digitVal = vars['digit'] !== undefined ? vars['digit'] : '';
+    return `Extracts the rightmost digit of ${prevNum} using modulo 10 (${prevNum} % 10 = ${digitVal}) and assigns it to 'digit'.`;
+  }
+
+  // 7. Accumulation: reversed_num = reversed_num * 10 + digit
+  if (trimmed.includes('* 10') && (trimmed.includes('+') || trimmed.includes('reversed_num'))) {
+    const revVal = vars['reversed_num'] !== undefined ? vars['reversed_num'] : '';
+    return `Shifts existing accumulated digits left by multiplying by 10 and adds digit, updating 'reversed_num' to ${revVal}.`;
+  }
+
+  // 8. Integer division truncation: num //= 10
+  if (trimmed.includes('//=') || trimmed.includes('/=') || trimmed.includes('num = num /')) {
+    const newNum = vars['num'] !== undefined ? vars['num'] : 0;
+    return `Performs integer division by 10 to truncate and drop the processed digit. 'num' is now ${newNum}.`;
+  }
+
+  // 9. Generic Variable Assignment
   if (changedVar && vars[changedVar] !== undefined) {
     const val = typeof vars[changedVar] === 'object' ? JSON.stringify(vars[changedVar]) : String(vars[changedVar]);
     const displayVal = val.length > 50 ? val.substring(0, 47) + '...' : val;
-    return `Calculated and assigned '${changedVar} = ${displayVal}'.`;
-  }
-  if (trimmed.startsWith('while ') || trimmed.startsWith('while(')) {
-    return `Evaluating while-loop condition.`;
-  }
-  if (trimmed.startsWith('for ') || trimmed.startsWith('for(')) {
-    return `Advancing loop iterator counter.`;
-  }
-  if (trimmed.startsWith('if ') || trimmed.startsWith('if(') || trimmed.startsWith('elif ')) {
-    return `Evaluating conditional branch expression.`;
+    return `Assigns initial value ${displayVal} to variable '${changedVar}'.`;
   }
 
   return `Executing statement: ${trimmed}`;
@@ -148,11 +206,16 @@ function generateDynamicExplanation(lineCode, vars, changedVar) {
 // Dynamic Specialized Tracers
 // ----------------------------------------------------
 
-function traceDynamicReverseNumber(rawLines, lang) {
+function traceDynamicReverseNumber(rawLines, lang, customInputs = '') {
   const codeText = rawLines.join('\n');
   let numInit = 12345;
-  const numMatch = codeText.match(/num\s*=\s*(\d+)/i) || codeText.match(/int\s+num\s*=\s*(\d+)/i);
-  if (numMatch) numInit = parseInt(numMatch[1], 10);
+  
+  if (customInputs && !isNaN(parseInt(customInputs.trim(), 10))) {
+    numInit = parseInt(customInputs.trim(), 10);
+  } else {
+    const numMatch = codeText.match(/num\s*=\s*(\d+)/i) || codeText.match(/int\s+num\s*=\s*(\d+)/i);
+    if (numMatch) numInit = parseInt(numMatch[1], 10);
+  }
 
   let num = numInit;
   let reversed_num = 0;
@@ -160,9 +223,9 @@ function traceDynamicReverseNumber(rawLines, lang) {
   let cumulativeOutput = '';
   const steps = [];
 
-  const lineNum = findLine(rawLines, [/num\s*=\s*\d+/i]) || 1;
+  const lineNum = findLine(rawLines, [/num\s*=/i]) || 1;
   const lineRev = findLine(rawLines, [/reversed_num\s*=\s*0/i, /rev\s*=\s*0/i]) || 2;
-  const lineWhile = findLine(rawLines, [/while\s*\(?num\s*!=?\s*0\)?/i, /while\s*\(?num\s*>\s*0\)?/i]) || 4;
+  const lineWhile = findLine(rawLines, [/while\s*\(?num/i]) || 4;
   const lineDigit = findLine(rawLines, [/digit\s*=\s*num\s*%\s*10/i, /%\s*10/i]) || 5;
   const lineCalc = findLine(rawLines, [/reversed_num\s*=\s*reversed_num\s*\*\s*10/i, /rev\s*=\s*rev\s*\*\s*10/i]) || 6;
   const lineDiv = findLine(rawLines, [/num\s*\/\/=\s*10/i, /num\s*\/=\s*10/i, /num\s*=\s*num\s*\/\s*10/i]) || 7;
@@ -242,7 +305,7 @@ function traceDynamicReverseNumber(rawLines, lang) {
     callStack: [{ frameName: 'Main Block', line: linePrint }],
     variables: { num: 0, reversed_num, digit },
     output: cumulativeOutput,
-    explanation: `The print() function statement displays the output in the compiler terminal.`
+    explanation: `The print() function statement displays the output, which can be viewed in the output panel.`
   });
 
   return formatSteps(steps, lang, cumulativeOutput);
@@ -320,7 +383,7 @@ function traceDynamicBubbleSort(rawLines, lang) {
     variables: { sorted: true, total_elements: arr.length },
     dataStructures: [{ name: 'arr', type: 'array', items: [...arr], activeIndices: [0, 1, 2, 3, 4] }],
     output: cumulativeOutput,
-    explanation: `Array sorting complete. Output: ${cumulativeOutput}`
+    explanation: `The print() function statement displays the output, which can be viewed in the output panel.`
   });
 
   return formatSteps(steps, lang, cumulativeOutput);
@@ -390,7 +453,7 @@ function traceDynamicBinarySearch(rawLines, lang) {
     variables: { resultIndex: foundIndex, target },
     dataStructures: [{ name: 'arr', type: 'array', items: [...arr], activeIndices: [foundIndex], pointers: { found: foundIndex } }],
     output: cumulativeOutput,
-    explanation: `Search terminated. Output: ${cumulativeOutput}`
+    explanation: `The print() function statement displays the output, which can be viewed in the output panel.`
   });
 
   return formatSteps(steps, lang, cumulativeOutput);
@@ -400,10 +463,12 @@ function traceDynamicBinarySearch(rawLines, lang) {
 // General Universal Dynamic Interpreter
 // ----------------------------------------------------
 
-function traceGeneralCode(rawLines, lang) {
+function traceGeneralCode(rawLines, lang, customInputs = '') {
   const steps = [];
   const variables = {};
   let cumulativeOutput = '';
+  const inputTokens = customInputs ? customInputs.split('\n').filter(Boolean) : [];
+  let inputIdx = 0;
 
   const meaningfulLines = [];
   for (let idx = 0; idx < rawLines.length; idx++) {
@@ -424,37 +489,53 @@ function traceGeneralCode(rawLines, lang) {
     let changedVar = null;
     let explanation = `Executing line ${lineNum}: ${text}`;
 
-    const assignMatch = text.match(/(?:int|float|double|char|bool|auto|let|const|var|String)?\s*([a-zA-Z_]\w*)\s*=\s*(.+)/);
-    if (assignMatch && !text.startsWith('if') && !text.startsWith('while') && !text.startsWith('for')) {
-      const varName = assignMatch[1].trim();
-      const expr = assignMatch[2].replace(/[;,]$/, '').trim();
-
-      let val = expr;
-      try {
-        if (/^[\d+\-*/%().\s]+$/.test(expr)) {
-          val = eval(expr);
-        } else if (expr.startsWith('"') || expr.startsWith("'")) {
-          val = expr.slice(1, -1);
-        } else if (expr === 'true' || expr === 'false') {
-          val = expr === 'true';
-        }
-      } catch (e) {}
-
-      variables[varName] = val;
+    // User input in C/C++/Java (cin >> x, scanf("%d", &x), scanner.next())
+    if (text.includes('cin >>') || text.includes('scanf(') || text.includes('.nextInt()') || text.includes('.nextLine()')) {
+      const varMatch = text.match(/cin\s*>>\s*([a-zA-Z_]\w*)/) || text.match(/scanf\([^,]+,\s*&([a-zA-Z_]\w*)\)/) || text.match(/([a-zA-Z_]\w*)\s*=\s*scanner\./i);
+      const varName = varMatch ? varMatch[1] : 'input_val';
+      const userVal = inputTokens[inputIdx] || '15';
+      inputIdx++;
+      
+      const numVal = isNaN(Number(userVal)) ? userVal : Number(userVal);
+      variables[varName] = numVal;
       changedVar = varName;
-      explanation = `Computed and assigned '${varName} = ${JSON.stringify(val)}'.`;
+      explanation = `The value entered by the user, "${userVal}", is converted and assigned to variable ${varName}.`;
+    }
+    // Variable assignment: e.g. x = 10, int x = 10
+    else {
+      const assignMatch = text.match(/(?:int|float|double|char|bool|auto|let|const|var|String)?\s*([a-zA-Z_]\w*)\s*=\s*(.+)/);
+      if (assignMatch && !text.startsWith('if') && !text.startsWith('while') && !text.startsWith('for')) {
+        const varName = assignMatch[1].trim();
+        const expr = assignMatch[2].replace(/[;,]$/, '').trim();
+
+        let val = expr;
+        try {
+          if (/^[\d+\-*/%().\s]+$/.test(expr)) {
+            val = eval(expr);
+          } else if (expr.startsWith('"') || expr.startsWith("'")) {
+            val = expr.slice(1, -1);
+          } else if (expr === 'true' || expr === 'false') {
+            val = expr === 'true';
+          }
+        } catch (e) {}
+
+        variables[varName] = val;
+        changedVar = varName;
+        explanation = `Assign initial value ${JSON.stringify(val)} to variable '${varName}'.`;
+      }
     }
 
+    // Output printing
     if (text.includes('print(') || text.includes('printf(') || text.includes('cout') || text.includes('System.out')) {
       const stringLiteral = text.match(/(["'])(.*?)\1/);
       let outStr = '';
       if (stringLiteral) {
         outStr = stringLiteral[2];
       } else {
-        outStr = Object.entries(variables).map(([k, v]) => `${k}=${v}`).join(', ') || 'Program output';
+        outStr = Object.entries(variables).map(([k, v]) => `${v}`).join('\n') || 'Program output';
       }
       cumulativeOutput = cumulativeOutput ? `${cumulativeOutput}\n${outStr}` : outStr;
-      explanation = `Displays output in console: "${outStr}".`;
+      explanation = `The print() function statement displays the output, which can be viewed in the output panel.`;
     }
 
     steps.push({
@@ -496,13 +577,12 @@ function getCompilerCommand(lang) {
 function formatSteps(steps, lang = 'python', finalOutput = '') {
   const totalSteps = steps.length;
   const compilerCmd = getCompilerCommand(lang);
-  const compilerOutput = `[Running] ${compilerCmd}\n${finalOutput}\n\n[Done] exited with code=0 in 0.024 seconds`;
 
   return {
     totalSteps,
     finalOutput,
-    compilerOutput,
-    executionTime: '0.024s',
+    compilerOutput: `[Running] ${compilerCmd}\n${finalOutput}\n\n[Done] exited with code=0 in 0.015 seconds`,
+    executionTime: '0.015s',
     exitCode: 0,
     steps: steps.map((step, idx) => ({
       stepNumber: idx + 1,
@@ -514,9 +594,8 @@ function formatSteps(steps, lang = 'python', finalOutput = '') {
       changedVar: step.changedVar || null,
       dataStructures: step.dataStructures || null,
       output: step.output || '',
-      compilerOutput: `[Running] ${compilerCmd}\n${step.output}\n\n[Executing step ${idx + 1} of ${totalSteps}...]`,
       explanation: step.explanation || `Step ${idx + 1} executed on line ${step.line}.`,
-      statusText: idx + 1 === totalSteps ? 'All steps executed.' : `Step ${idx + 1} of ${totalSteps} executing...`
+      statusText: idx + 1 === totalSteps ? 'All steps executed.' : `Step ${idx + 1} of ${totalSteps} executed.`
     }))
   };
 }

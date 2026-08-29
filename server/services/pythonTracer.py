@@ -2,6 +2,7 @@
 import json
 import io
 import time
+import builtins
 import traceback
 
 def run_traced_code(source_code, stdin_data=""):
@@ -10,6 +11,10 @@ def run_traced_code(source_code, stdin_data=""):
     output_buffer = io.StringIO()
     lines = source_code.splitlines()
 
+    stdin_lines = [l for l in (stdin_data or "").splitlines()]
+    stdin_idx = [0]
+    waiting_input = {"is_waiting": False, "prompt": "", "line": 1}
+
     class InterceptStdout:
         def write(self, text):
             output_buffer.write(text)
@@ -17,10 +22,24 @@ def run_traced_code(source_code, stdin_data=""):
             pass
 
     old_stdout = sys.stdout
-    old_stdin = sys.stdin
-    
+    old_input = builtins.input
+
+    def custom_input(prompt=""):
+        if prompt:
+            output_buffer.write(str(prompt))
+        if stdin_idx[0] < len(stdin_lines):
+            val = stdin_lines[stdin_idx[0]]
+            stdin_idx[0] += 1
+            output_buffer.write(f"{val}\n")
+            return val
+        else:
+            # Need interactive input from user
+            waiting_input["is_waiting"] = True
+            waiting_input["prompt"] = str(prompt) if prompt else ""
+            raise StopIteration("__WAITING_FOR_USER_INPUT__")
+
     sys.stdout = InterceptStdout()
-    sys.stdin = io.StringIO(stdin_data or "")
+    builtins.input = custom_input
 
     def trace_lines(frame, event, arg):
         if event == 'line' and frame.f_code.co_filename == '<user_code>':
@@ -62,7 +81,7 @@ def run_traced_code(source_code, stdin_data=""):
 
     if parse_error:
         sys.stdout = old_stdout
-        sys.stdin = old_stdin
+        builtins.input = old_input
         elapsed = time.time() - start_time
         return {
             "error": "SyntaxError",
@@ -86,14 +105,17 @@ def run_traced_code(source_code, stdin_data=""):
     exec_error = None
     try:
         exec(compiled_code, global_scope)
-    except EOFError:
-        exec_error = "EOFError: Code requested user input via input(), but the input stream was empty. Please provide test input in the 'Custom Input (stdin)' panel."
+    except StopIteration as e:
+        if str(e) == "__WAITING_FOR_USER_INPUT__":
+            pass # Normal pause for interactive user input
+        else:
+            exec_error = traceback.format_exc()
     except Exception as e:
         exec_error = traceback.format_exc()
     finally:
         sys.settrace(None)
         sys.stdout = old_stdout
-        sys.stdin = old_stdin
+        builtins.input = old_input
 
     elapsed = time.time() - start_time
     raw_stdout = output_buffer.getvalue()
@@ -107,7 +129,23 @@ def run_traced_code(source_code, stdin_data=""):
 
     compiler_banner = f"[Running] python -u \"main.py\"\n{full_output.rstrip()}\n\n[Done] exited with code={exit_code} in {elapsed:.3f} seconds"
 
-    if steps:
+    if waiting_input["is_waiting"]:
+        current_line = steps[-1]["line"] if steps else 1
+        current_code = lines[current_line - 1] if 0 < current_line <= len(lines) else ""
+        
+        # If waiting for input, add/update the waiting step
+        waiting_step = {
+            "line": current_line,
+            "lineCode": current_code,
+            "variables": steps[-1]["variables"] if steps else {},
+            "callStack": [{"frameName": "Main Block", "line": current_line}],
+            "output": raw_stdout,
+            "isWaitingForInput": True,
+            "inputPrompt": waiting_input["prompt"] or "Enter input:"
+        }
+        steps = [waiting_step]
+
+    elif steps:
         steps[-1]["output"] = full_output.rstrip()
 
     return {
@@ -115,6 +153,8 @@ def run_traced_code(source_code, stdin_data=""):
         "totalSteps": len(steps),
         "finalOutput": full_output.rstrip(),
         "compilerOutput": compiler_banner,
+        "isWaitingForInput": waiting_input["is_waiting"],
+        "inputPrompt": waiting_input["prompt"],
         "exitCode": exit_code,
         "executionTime": f"{elapsed:.3f}s",
         "error": exec_error
