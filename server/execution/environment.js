@@ -80,17 +80,109 @@ const KNOWN_PATHS = {
   ]
 };
 
-function tryFindBinary(candidates, testArgs = ['--version']) {
+function findJavaRuntime() {
+  const isWin = process.platform === 'win32';
+  const candidates = [];
+
+  // 1. JAVA_HOME / JDK_HOME
+  if (process.env.JAVA_HOME) {
+    candidates.push(path.join(process.env.JAVA_HOME, 'bin', isWin ? 'javac.exe' : 'javac'));
+  }
+  if (process.env.JDK_HOME) {
+    candidates.push(path.join(process.env.JDK_HOME, 'bin', isWin ? 'javac.exe' : 'javac'));
+  }
+
+  // 2. Android Studio JBR
+  if (isWin) {
+    candidates.push('C:\\Program Files\\Android\\Android Studio\\jbr\\bin\\javac.exe');
+    candidates.push('C:\\Program Files (x86)\\Android\\Android Studio\\jbr\\bin\\javac.exe');
+    if (process.env.LOCALAPPDATA) {
+      candidates.push(path.join(process.env.LOCALAPPDATA, 'Programs', 'Android Studio', 'jbr', 'bin', 'javac.exe'));
+    }
+  }
+
+  // 3. Common Windows JDK Installations
+  if (isWin) {
+    const searchRoots = [
+      'C:\\Program Files\\Java',
+      'C:\\Program Files\\Eclipse Adoptium',
+      'C:\\Program Files\\Amazon Corretto',
+      'C:\\Program Files\\Microsoft',
+      'C:\\Program Files\\Zulu'
+    ];
+    for (const root of searchRoots) {
+      try {
+        if (fs.existsSync(root)) {
+          const subdirs = fs.readdirSync(root);
+          for (const sub of subdirs) {
+            candidates.push(path.join(root, sub, 'bin', 'javac.exe'));
+          }
+        }
+      } catch {}
+    }
+  }
+
+  // 4. PATH lookup via where.exe / which
+  try {
+    const whereProc = spawnSync(isWin ? 'where.exe' : 'which', ['javac'], { encoding: 'utf8', timeout: 2000 });
+    if (whereProc.status === 0 && whereProc.stdout) {
+      const found = whereProc.stdout.trim().split('\n')[0].trim();
+      if (found) candidates.push(found);
+    }
+  } catch {}
+
+  // 5. Fallback standard commands
+  candidates.push('javac');
+  candidates.push('/usr/bin/javac');
+  candidates.push('/usr/lib/jvm/default-java/bin/javac');
+
   for (const candidate of candidates) {
     try {
-      // If it's an absolute path, check existence first
+      if (candidate.includes(path.sep) && !fs.existsSync(candidate)) {
+        continue;
+      }
+
+      // Check corresponding java binary
+      let javaBin = 'java';
+      if (candidate.includes(path.sep)) {
+        const dir = path.dirname(candidate);
+        const companionJava = path.join(dir, isWin ? 'java.exe' : 'java');
+        if (fs.existsSync(companionJava)) {
+          javaBin = companionJava;
+        }
+      }
+
+      const proc = spawnSync(candidate, ['-version'], {
+        encoding: 'utf8',
+        timeout: 6000,
+        windowsHide: true
+      });
+
+      if (proc.status === 0 || (proc.stdout && proc.stdout.trim().length > 0) || (proc.stderr && proc.stderr.trim().length > 0)) {
+        const versionOutput = (proc.stdout || proc.stderr || '').trim().split('\n')[0];
+        return {
+          available: true,
+          javacPath: candidate,
+          javaPath: javaBin,
+          version: versionOutput
+        };
+      }
+    } catch {}
+  }
+
+  return { available: false, javacPath: null, javaPath: null, version: null };
+}
+
+function tryFindBinary(candidates, testArgs = ['--version'], timeoutMs = 3000) {
+  for (const candidate of candidates) {
+    try {
       if (candidate.includes(path.sep) && !fs.existsSync(candidate)) {
         continue;
       }
 
       const proc = spawnSync(candidate, testArgs, {
         encoding: 'utf8',
-        timeout: 2500,
+        timeout: timeoutMs,
         windowsHide: true
       });
 
@@ -102,9 +194,7 @@ function tryFindBinary(candidates, testArgs = ['--version']) {
           version: output
         };
       }
-    } catch {
-      // Candidate failed, try next
-    }
+    } catch {}
   }
   return { available: false, binPath: null, version: null };
 }
@@ -137,9 +227,7 @@ export function detectEnvironment(forceRefresh = false) {
       : { available: false, compiler: null, binPath: null, version: null });
 
   // 4. Java Compiler & Runtime check
-  const javacCheck = tryFindBinary(KNOWN_PATHS.javac, ['-version']);
-  const javaCheck = tryFindBinary(KNOWN_PATHS.java, ['-version']);
-  const javaAvailable = javacCheck.available && javaCheck.available;
+  const javaRuntime = findJavaRuntime();
 
   cachedEnvironment = {
     checkedAt: new Date().toISOString(),
@@ -147,12 +235,7 @@ export function detectEnvironment(forceRefresh = false) {
       python: pythonCheck,
       c: cCompiler,
       cpp: cppCompiler,
-      java: {
-        available: javaAvailable,
-        javacPath: javacCheck.binPath,
-        javaPath: javaCheck.binPath,
-        version: javacCheck.version || javaCheck.version
-      }
+      java: javaRuntime
     }
   };
 

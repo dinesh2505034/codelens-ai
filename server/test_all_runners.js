@@ -1,9 +1,8 @@
-import { executeProgram } from './execution/executionService.js';
 import { generateStepTrace } from './services/universalTraceEngine.js';
 
 async function runTests() {
   console.log('====================================================');
-  console.log('Starting Ground-Truth Real Execution Test Suite...');
+  console.log('Starting Synchronized Real Execution Test Suite...');
   console.log('====================================================\n');
 
   let passed = 0;
@@ -50,22 +49,45 @@ async function runTests() {
     if (!lastStep.errorDiagnostic || !lastStep.errorDiagnostic.summary) {
       throw new Error('Missing errorDiagnostic in step');
     }
-    console.log('       -> Python Diagnostic:', lastStep.errorDiagnostic.summary);
   });
 
-  // 4. C Success
-  await assert('C: Real GCC Compilation & Execution', async () => {
+  // 4. C Synchronized Step-by-Step Execution & Output
+  await assert('C: Synchronized Step-by-Step Execution (swap.c)', async () => {
     const code = `#include <stdio.h>
+
+void swap(int *a, int *b) {
+    int temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
 int main() {
-    int x = 15;
-    int y = 27;
-    printf("Result: %d\\n", x + y);
+    int x = 42;
+    int y = 99;
+    
+    printf("Before swap: x = %d, y = %d\\n", x, y);
+    swap(&x, &y);
+    printf("After swap: x = %d, y = %d\\n", x, y);
+    
     return 0;
 }`;
     const trace = await generateStepTrace(code, 'c');
-    if (!trace.finalOutput.includes('Result: 42')) {
-      throw new Error(`Expected 'Result: 42', got: ${trace.finalOutput}`);
+    if (!trace.finalOutput.includes('Before swap: x = 42, y = 99') || !trace.finalOutput.includes('After swap: x = 99, y = 42')) {
+      throw new Error(`Output missing expected strings: ${trace.finalOutput}`);
     }
+    if (trace.steps.length < 5) {
+      throw new Error(`Expected at least 5 synchronized steps, got ${trace.steps.length}`);
+    }
+    // Verify first step output is empty (output is synced, not dumped at step 1)
+    if (trace.steps[0].output.trim() !== '') {
+      throw new Error(`Step 1 output should be empty, got: "${trace.steps[0].output}"`);
+    }
+    // Verify final step has full output
+    const lastStep = trace.steps[trace.steps.length - 1];
+    if (!lastStep.output.includes('After swap: x = 99, y = 42')) {
+      throw new Error(`Final step should include 'After swap', got: "${lastStep.output}"`);
+    }
+    console.log(`       -> C Trace: ${trace.steps.length} synchronized steps captured.`);
   });
 
   // 5. C Syntax Error
@@ -79,25 +101,46 @@ int main() {
     if (!trace.steps[0].hasError || trace.steps[0].errorType !== 'CompilationError') {
       throw new Error(`Expected CompilationError, got: ${JSON.stringify(trace)}`);
     }
-    console.log('       -> C Error Caught:', trace.steps[0].explanation);
   });
 
-  // 6. C++ Success
-  await assert('C++: Real G++ Compilation & Execution', async () => {
+  // 6. C++ Synchronized Step-by-Step Execution & Output (bubble_sort.cpp)
+  await assert('C++: Synchronized Step-by-Step Execution (bubble_sort.cpp)', async () => {
     const code = `#include <iostream>
 #include <vector>
-#include <numeric>
 
 int main() {
-    std::vector<int> nums = {1, 2, 3, 4, 5};
-    int total = std::accumulate(nums.begin(), nums.end(), 0);
-    std::cout << "Vector Total: " << total << std::endl;
+    int arr[] = {64, 34, 25, 12, 22};
+    int n = sizeof(arr) / sizeof(arr[0]);
+
+    for (int i = 0; i < n - 1; i++) {
+        for (int j = 0; j < n - i - 1; j++) {
+            if (arr[j] > arr[j + 1]) {
+                int temp = arr[j];
+                arr[j] = arr[j + 1];
+                arr[j + 1] = temp;
+            }
+        }
+    }
+
+    std::cout << "Sorted array: ";
+    for (int i = 0; i < n; i++) {
+        std::cout << arr[i] << " ";
+    }
+    std::cout << std::endl;
     return 0;
 }`;
     const trace = await generateStepTrace(code, 'cpp');
-    if (!trace.finalOutput.includes('Vector Total: 15')) {
-      throw new Error(`Expected 'Vector Total: 15', got: ${trace.finalOutput}`);
+    if (!trace.finalOutput.includes('Sorted array: 12 22 25 34 64')) {
+      throw new Error(`Expected sorted array in output, got: ${trace.finalOutput}`);
     }
+    if (trace.steps.length < 15) {
+      throw new Error(`Expected loop steps, got only ${trace.steps.length} steps`);
+    }
+    // Verify first step output is empty (synced output)
+    if (trace.steps[0].output.trim() !== '') {
+      throw new Error(`Step 1 output should be empty, got: "${trace.steps[0].output}"`);
+    }
+    console.log(`       -> C++ Trace: ${trace.steps.length} synchronized loop/swap steps captured.`);
   });
 
   // 7. C++ Syntax Error
@@ -111,21 +154,36 @@ int main() {
     if (!trace.steps[0].hasError || trace.steps[0].errorType !== 'CompilationError') {
       throw new Error(`Expected CompilationError, got: ${JSON.stringify(trace)}`);
     }
-    console.log('       -> C++ Error Caught:', trace.steps[0].explanation);
   });
 
-  // 8. Java Success
-  await assert('Java: Real Javac Compilation & Execution', async () => {
-    const code = `public class Main {
+  // 8. Java Synchronized Step-by-Step Execution & Output (Factorial.java)
+  await assert('Java: Synchronized Step-by-Step Execution (Factorial.java)', async () => {
+    const code = `public class Factorial {
+    public static int factorial(int n) {
+        if (n <= 1) {
+            return 1;
+        }
+        return n * factorial(n - 1);
+    }
+
     public static void main(String[] args) {
-        int a = 21;
-        System.out.println("Java Value: " + (a * 2));
+        int num = 4;
+        int result = factorial(num);
+        System.out.println("Factorial of " + num + " is: " + result);
     }
 }`;
     const trace = await generateStepTrace(code, 'java');
-    if (!trace.finalOutput.includes('Java Value: 42')) {
-      throw new Error(`Expected 'Java Value: 42', got: ${trace.finalOutput}`);
+    if (!trace.finalOutput.includes('Factorial of 4 is: 24')) {
+      throw new Error(`Expected 'Factorial of 4 is: 24', got: ${trace.finalOutput}`);
     }
+    if (trace.steps.length < 5) {
+      throw new Error(`Expected recursive steps, got ${trace.steps.length}`);
+    }
+    // Verify step 1 has empty output (synced)
+    if (trace.steps[0].output.trim() !== '') {
+      throw new Error(`Step 1 output should be empty, got: "${trace.steps[0].output}"`);
+    }
+    console.log(`       -> Java Trace: ${trace.steps.length} synchronized recursion steps captured.`);
   });
 
   // 9. Java Compilation Error
@@ -139,7 +197,6 @@ int main() {
     if (!trace.steps[0].hasError || trace.steps[0].errorType !== 'CompilationError') {
       throw new Error(`Expected CompilationError, got: ${JSON.stringify(trace)}`);
     }
-    console.log('       -> Java Error Caught:', trace.steps[0].explanation);
   });
 
   console.log('\n====================================================');

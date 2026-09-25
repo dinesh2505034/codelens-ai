@@ -1,7 +1,9 @@
-﻿import path from 'path';
+import path from 'path';
 import fs from 'fs';
-import { createSandbox, cleanupSandbox, runProcessWithLimits } from '../sandbox.js';
+import { createSandbox, cleanupSandbox, getSanitizedEnv, runProcessWithLimits } from '../sandbox.js';
 import { getLanguageCompiler } from '../environment.js';
+import { instrumentJava } from '../instrumentation/javaInstrumenter.js';
+import { parseInstrumentedTrace } from '../instrumentation/traceParser.js';
 
 export async function runRealJava(code, customInputs = '', options = {}) {
   const compilerInfo = getLanguageCompiler('java');
@@ -9,7 +11,7 @@ export async function runRealJava(code, customInputs = '', options = {}) {
     return {
       error: 'JavaCompilerNotFound',
       exitCode: 127,
-      compilerOutput: 'Error: Java Development Kit (javac/java) is not installed in this environment.',
+      compilerOutput: 'Error: Java Development Kit (javac/java) is not installed in this environment.\nPlease install JDK 17+ or ensure javac is in your system PATH.',
       finalOutput: 'Error: Java Development Kit (javac/java) is not installed in this environment.',
       steps: [{
         line: 1,
@@ -19,7 +21,7 @@ export async function runRealJava(code, customInputs = '', options = {}) {
         output: 'Error: Java Development Kit (javac/java) is not installed in this environment.',
         hasError: true,
         errorType: 'EnvironmentError',
-        explanation: 'Java compiler (javac) is not available on this server.'
+        explanation: '❌ Compiler Unavailable: Java programs require the Java Development Kit (javac and java) installed on the system.'
       }],
       totalSteps: 1
     };
@@ -28,6 +30,12 @@ export async function runRealJava(code, customInputs = '', options = {}) {
   const sandboxDir = createSandbox('codelens-java-');
   try {
     const rawLines = code.split('\n');
+
+    // Add javac / java bin folder to PATH so JVM can locate runtime dependencies
+    const env = getSanitizedEnv(sandboxDir);
+    const javaBinDir = path.dirname(compilerInfo.javacPath);
+    env.PATH = javaBinDir + (process.platform === 'win32' ? ';' : ':') + (env.PATH || '');
+    env.JAVA_HOME = path.dirname(javaBinDir);
 
     // Detect class name
     let className = 'Main';
@@ -49,11 +57,12 @@ export async function runRealJava(code, customInputs = '', options = {}) {
     const sourceFilePath = path.join(sandboxDir, sourceFileName);
     fs.writeFileSync(sourceFilePath, wrappedCode, 'utf8');
 
-    // 1. REAL COMPILATION VIA JAVAC
+    // 1. REAL COMPILATION OF ORIGINAL SOURCE VIA JAVAC
     const compileStartTime = Date.now();
     const compileRes = await runProcessWithLimits(compilerInfo.javacPath, [sourceFileName], {
       cwd: sandboxDir,
-      timeoutMs: options.compileTimeoutMs || 5000
+      env,
+      timeoutMs: options.compileTimeoutMs || 8000
     });
 
     const compileTime = ((Date.now() - compileStartTime) / 1000).toFixed(3);
@@ -82,7 +91,7 @@ export async function runRealJava(code, customInputs = '', options = {}) {
           line: errorLine,
           lineCode: rawLines[errorLine - 1] || code.split('\n')[0] || '',
           variables: {},
-          callStack: [{ frameName: 'Main Block', line: errorLine }],
+          callStack: [{ frameName: `${className}.main()`, line: errorLine }],
           output: stderr,
           hasError: true,
           errorType: 'CompilationError',
@@ -93,11 +102,52 @@ export async function runRealJava(code, customInputs = '', options = {}) {
       };
     }
 
-    // 2. REAL EXECUTION VIA JAVA RUNTIME
+    // 2. SYNCHRONIZED EXECUTION VIA INSTRUMENTATION
+    let synchronizedSteps = null;
+    let synchronizedFinalOutput = '';
+
+    try {
+      const instrumentedCode = instrumentJava(wrappedCode);
+      const instSandboxDir = createSandbox('codelens-javainst-');
+      try {
+        const instSourceFilePath = path.join(instSandboxDir, sourceFileName);
+        fs.writeFileSync(instSourceFilePath, instrumentedCode, 'utf8');
+
+        const instCompRes = await runProcessWithLimits(compilerInfo.javacPath, [sourceFileName], {
+          cwd: instSandboxDir,
+          env,
+          timeoutMs: options.compileTimeoutMs || 8000
+        });
+
+        if (instCompRes.exitCode === 0 && !instCompRes.stderr.includes('error:')) {
+          const instRunRes = await runProcessWithLimits(compilerInfo.javaPath, ['-Xmx128m', '-Dfile.encoding=UTF-8', className], {
+            cwd: instSandboxDir,
+            env,
+            input: customInputs || '',
+            timeoutMs: options.timeoutMs || 4000
+          });
+
+          if (!instRunRes.timedOut && instRunRes.stdout) {
+            const parsed = parseInstrumentedTrace(instRunRes.stdout, rawLines);
+            if (parsed.steps && parsed.steps.length > 0) {
+              synchronizedSteps = parsed.steps;
+              synchronizedFinalOutput = parsed.finalOutput;
+            }
+          }
+        }
+      } finally {
+        cleanupSandbox(instSandboxDir);
+      }
+    } catch (instErr) {
+      // Fall through to original class execution
+    }
+
+    // 3. REAL EXECUTION VIA JAVA RUNTIME (Ground truth stdout/stderr & crash check)
     const runStartTime = Date.now();
     const timeoutMs = options.timeoutMs || 4000;
     const runRes = await runProcessWithLimits(compilerInfo.javaPath, ['-Xmx128m', '-Dfile.encoding=UTF-8', className], {
       cwd: sandboxDir,
+      env,
       input: customInputs || '',
       timeoutMs
     });
@@ -116,7 +166,7 @@ export async function runRealJava(code, customInputs = '', options = {}) {
           line: 1,
           lineCode: rawLines[0] || '',
           variables: {},
-          callStack: [{ frameName: 'Main Block', line: 1 }],
+          callStack: [{ frameName: `${className}.main()`, line: 1 }],
           output: banner,
           hasError: true,
           errorType: 'TimeoutError',
@@ -132,33 +182,60 @@ export async function runRealJava(code, customInputs = '', options = {}) {
     const exitCode = runRes.exitCode;
     const banner = `[Running] java ${className}\n${fullOutput}\n\n[Done] exited with code=${exitCode} in ${runTime} seconds`;
 
-    // 3. Check for runtime exceptions
+    // Check for runtime exceptions
     let runtimeError = null;
-    let errorLine = 1;
+    let exceptionLine = null;
     if (exitCode !== 0 || rawStderr.includes('Exception in thread')) {
-      const excMatch = rawStderr.match(/Exception in thread "[^"]*"\s+([\w\.$]+:\s*.*)/);
-      const excLineMatch = rawStderr.match(new RegExp(`${className}\\.java:(\\d+)`));
+      const excMatch = fullOutput.match(/Exception in thread "[^"]*"\s+([\w.$]+:\s*.*)/);
       if (excMatch) {
-        runtimeError = excMatch[1];
+        runtimeError = excMatch[1].split('\n')[0];
+      } else {
+        runtimeError = `Java process exited with code ${exitCode}`;
       }
-      if (excLineMatch) {
-        errorLine = Math.max(1, parseInt(excLineMatch[1], 10) - lineOffset);
+
+      const lineMatch = fullOutput.match(new RegExp(`${className}\\.java:(\\d+)`));
+      if (lineMatch) {
+        const rawErrLine = parseInt(lineMatch[1], 10);
+        exceptionLine = Math.max(1, rawErrLine - lineOffset);
       }
     }
 
-    // Build real execution steps
-    const steps = [];
-    const outputLines = rawStdout.split('\n');
+    // If synchronized steps are available, use them!
+    if (synchronizedSteps && synchronizedSteps.length > 0) {
+      const lastStep = synchronizedSteps[synchronizedSteps.length - 1];
+      if (runtimeError) {
+        lastStep.hasError = true;
+        lastStep.errorType = 'RuntimeError';
+        lastStep.errorMessage = runtimeError;
+        lastStep.explanation = `❌ ${runtimeError}`;
+        lastStep.statusText = `Terminated with error (exit code ${exitCode})`;
+      } else {
+        lastStep.explanation = 'Execution completed successfully.';
+        lastStep.statusText = 'Execution finished';
+      }
 
-    // Generate accurate line mappings from actual source lines
+      return {
+        steps: synchronizedSteps,
+        totalSteps: synchronizedSteps.length,
+        finalOutput: fullOutput || synchronizedFinalOutput,
+        compilerOutput: banner,
+        exitCode,
+        executionTime: `${runTime}s`,
+        error: runtimeError
+      };
+    }
+
+    // Fallback: build steps from source lines
+    const steps = [];
     let activeVars = {};
     for (let i = 0; i < rawLines.length; i++) {
       const lineNum = i + 1;
       const text = rawLines[i].trim();
-      if (!text || text.startsWith('//') || text.startsWith('/*') || text === '{' || text === '}') continue;
+      if (!text || text.startsWith('//') || text.startsWith('/*') || text === '{' || text === '}' || text.startsWith('import ') || text.startsWith('package ')) {
+        continue;
+      }
 
-      // Extract basic declared variables
-      const varDecl = text.match(/^(?:int|long|double|float|boolean|String|char)\s+([A-Za-z_]\w*)\s*=\s*([^;]+);/);
+      const varDecl = text.match(/^(?:int|long|double|float|char|boolean|String)\s+([A-Za-z_]\w*)\s*=\s*([^;]+);/);
       if (varDecl) {
         const vName = varDecl[1];
         let vVal = varDecl[2].trim();
@@ -171,41 +248,9 @@ export async function runRealJava(code, customInputs = '', options = {}) {
         lineCode: rawLines[i],
         variables: { ...activeVars },
         callStack: [{ frameName: `${className}.main()`, line: lineNum }],
-        output: steps.length === 0 ? '' : rawStdout,
+        output: i === rawLines.length - 1 ? fullOutput : '',
         explanation: `Execute line ${lineNum}: ${text}`
       });
-    }
-
-    if (steps.length === 0) {
-      steps.push({
-        line: 1,
-        lineCode: rawLines[0] || '',
-        variables: {},
-        callStack: [{ frameName: `${className}.main()`, line: 1 }],
-        output: rawStdout,
-        explanation: 'Program execution completed.'
-      });
-    }
-
-    // Attach runtime error step if failed
-    if (runtimeError) {
-      steps.push({
-        line: errorLine,
-        lineCode: rawLines[errorLine - 1] || '',
-        variables: activeVars,
-        callStack: [{ frameName: `${className}.main()`, line: errorLine }],
-        output: fullOutput,
-        hasError: true,
-        errorType: 'RuntimeException',
-        errorMessage: runtimeError,
-        explanation: `❌ Runtime Exception on line ${errorLine}: ${runtimeError}`,
-        statusText: `Terminated with exception`
-      });
-    } else {
-      // Ensure the final step has the complete output
-      steps[steps.length - 1].output = rawStdout;
-      steps[steps.length - 1].explanation = 'Execution completed successfully.';
-      steps[steps.length - 1].statusText = 'Execution finished';
     }
 
     return {
