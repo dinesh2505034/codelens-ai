@@ -1,8 +1,10 @@
 # Base image with Node.js and Python
 FROM node:20-bullseye-slim
 
-# Install Python 3, C/C++ compilers (build-essential), and Java Development Kit (default-jdk-headless)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Fix Debian slim missing man1 directory, then install Python 3, C/C++ compilers, and OpenJDK
+RUN mkdir -p /usr/share/man/man1 && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     build-essential \
