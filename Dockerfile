@@ -1,8 +1,17 @@
-﻿# Base image with Node.js and Python
+# Base image with Node.js and Python
 FROM node:20-bullseye-slim
 
-# Install Python 3 for the code execution & tracer engine
-RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
+# Install Python 3, C/C++ compilers (build-essential), and Java Development Kit (default-jdk-headless)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    build-essential \
+    default-jdk-headless \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set JAVA_HOME and ensure java/javac are on PATH
+ENV JAVA_HOME=/usr/lib/jvm/default-java
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 # Create working directory
 WORKDIR /app

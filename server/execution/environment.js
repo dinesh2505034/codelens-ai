@@ -122,6 +122,30 @@ function findJavaRuntime() {
     }
   }
 
+  // 3b. Common Linux JDK Installations
+  if (!isWin) {
+    const linuxRoots = [
+      '/usr/lib/jvm',
+      '/opt/jdk',
+      '/opt/java',
+      '/usr/local/java',
+      path.resolve(__dirname, '../tools/jdk')
+    ];
+    for (const root of linuxRoots) {
+      try {
+        if (fs.existsSync(root)) {
+          const directJavac = path.join(root, 'bin', 'javac');
+          if (fs.existsSync(directJavac)) candidates.push(directJavac);
+
+          const subdirs = fs.readdirSync(root);
+          for (const sub of subdirs) {
+            candidates.push(path.join(root, sub, 'bin', 'javac'));
+          }
+        }
+      } catch {}
+    }
+  }
+
   // 4. PATH lookup via where.exe / which
   try {
     const whereProc = spawnSync(isWin ? 'where.exe' : 'which', ['javac'], { encoding: 'utf8', timeout: 2000 });
