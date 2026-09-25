@@ -1,15 +1,15 @@
-# Base image with Node.js and Python
-FROM node:20-bullseye-slim
+# Base image with Node.js 20 on modern Debian 12 Bookworm
+FROM node:20-bookworm-slim
 
-# Fix Debian slim missing man1 directory, then install Python 3, C/C++ compilers, and OpenJDK
-RUN mkdir -p /usr/share/man/man1 && \
-    apt-get update && \
+# Install Python 3, C/C++ compilers, and OpenJDK 17
+RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     build-essential \
-    default-jdk-headless \
-    && rm -rf /var/lib/apt/lists/*
+    default-jdk-headless && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set JAVA_HOME and ensure java/javac are on PATH
 ENV JAVA_HOME=/usr/lib/jvm/default-java
