@@ -127,11 +127,69 @@ export async function runRealJava(code, customInputs = '', options = {}) {
             timeoutMs: options.timeoutMs || 4000
           });
 
-          if (!instRunRes.timedOut && instRunRes.stdout) {
+          if (instRunRes.timedOut) {
+            const runTime = (((options.timeoutMs || 4000)) / 1000).toFixed(3);
+            const banner = `[Running] java ${className}\n\nExecution Timed Out (${runTime}s limit exceeded).\nPossible infinite loop or blocked input stream.\n[Done] exited with code=-1 in ${runTime} seconds`;
+            return {
+              error: 'TimeoutError',
+              exitCode: -1,
+              executionTime: `${runTime}s`,
+              compilerOutput: banner,
+              finalOutput: banner,
+              steps: [{
+                line: 1,
+                lineCode: rawLines[0] || '',
+                variables: {},
+                callStack: [{ frameName: `${className}.main()`, line: 1 }],
+                output: banner,
+                hasError: true,
+                errorType: 'TimeoutError',
+                explanation: 'Execution timed out. The program likely entered an infinite loop or exceeded CPU limit.'
+              }],
+              totalSteps: 1
+            };
+          }
+
+          if (instRunRes.stdout) {
             const parsed = parseInstrumentedTrace(instRunRes.stdout, rawLines);
             if (parsed.steps && parsed.steps.length > 0) {
-              synchronizedSteps = parsed.steps;
-              synchronizedFinalOutput = parsed.finalOutput;
+              const exitCode = instRunRes.exitCode;
+              const fullOutput = instRunRes.stderr ? `${parsed.finalOutput}\n${instRunRes.stderr}`.trim() : parsed.finalOutput;
+
+              let runtimeError = null;
+              if (exitCode !== 0 || (instRunRes.stderr && instRunRes.stderr.includes('Exception in thread'))) {
+                const excMatch = fullOutput.match(/Exception in thread "[^"]*"\s+([\w.$]+:\s*.*)/);
+                if (excMatch) {
+                  runtimeError = excMatch[1].split('\n')[0];
+                } else {
+                  runtimeError = `Java process exited with code ${exitCode}`;
+                }
+              }
+
+              const lastStep = parsed.steps[parsed.steps.length - 1];
+              if (runtimeError) {
+                lastStep.hasError = true;
+                lastStep.errorType = 'RuntimeError';
+                lastStep.errorMessage = runtimeError;
+                lastStep.explanation = `❌ ${runtimeError}`;
+                lastStep.statusText = `Terminated with error (exit code ${exitCode})`;
+              } else {
+                lastStep.explanation = 'Execution completed successfully.';
+                lastStep.statusText = 'Execution finished';
+              }
+
+              const runTime = ((instRunRes.durationMs || 0) / 1000).toFixed(3);
+              const banner = `[Running] java ${className}\n${fullOutput}\n\n[Done] exited with code=${exitCode} in ${runTime} seconds`;
+
+              return {
+                steps: parsed.steps,
+                totalSteps: parsed.steps.length,
+                finalOutput: fullOutput,
+                compilerOutput: banner,
+                exitCode,
+                executionTime: `${runTime}s`,
+                error: runtimeError
+              };
             }
           }
         }
@@ -142,7 +200,7 @@ export async function runRealJava(code, customInputs = '', options = {}) {
       // Fall through to original class execution
     }
 
-    // 3. REAL EXECUTION VIA JAVA RUNTIME (Ground truth stdout/stderr & crash check)
+    // 3. FALLBACK: REAL EXECUTION VIA JAVA RUNTIME
     const runStartTime = Date.now();
     const timeoutMs = options.timeoutMs || 4000;
     const runRes = await runProcessWithLimits(compilerInfo.javaPath, ['-Xmx128m', '-Dfile.encoding=UTF-8', className], {
@@ -198,31 +256,6 @@ export async function runRealJava(code, customInputs = '', options = {}) {
         const rawErrLine = parseInt(lineMatch[1], 10);
         exceptionLine = Math.max(1, rawErrLine - lineOffset);
       }
-    }
-
-    // If synchronized steps are available, use them!
-    if (synchronizedSteps && synchronizedSteps.length > 0) {
-      const lastStep = synchronizedSteps[synchronizedSteps.length - 1];
-      if (runtimeError) {
-        lastStep.hasError = true;
-        lastStep.errorType = 'RuntimeError';
-        lastStep.errorMessage = runtimeError;
-        lastStep.explanation = `❌ ${runtimeError}`;
-        lastStep.statusText = `Terminated with error (exit code ${exitCode})`;
-      } else {
-        lastStep.explanation = 'Execution completed successfully.';
-        lastStep.statusText = 'Execution finished';
-      }
-
-      return {
-        steps: synchronizedSteps,
-        totalSteps: synchronizedSteps.length,
-        finalOutput: fullOutput || synchronizedFinalOutput,
-        compilerOutput: banner,
-        exitCode,
-        executionTime: `${runTime}s`,
-        error: runtimeError
-      };
     }
 
     // Fallback: build steps from source lines

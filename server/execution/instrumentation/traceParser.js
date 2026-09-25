@@ -3,8 +3,8 @@
  * into a step-by-step trace with synchronized cumulative output and variable tracking.
  */
 export function parseInstrumentedTrace(rawStdout, rawLines) {
-  // Match the marker cleanly without capturing separating newlines
-  const parts = rawStdout.split(/(?:\r?\n)?>>>CL_STEP:({.*?\}):CL_STEP<<<\r?\n?/);
+  // Split strictly on marker and its trailing newline, preserving user's preceding newlines intact
+  const parts = rawStdout.split(/>>>CL_STEP:({.*?\}):CL_STEP<<<\r?\n/);
   let cumulativeOutput = '';
   const rawSteps = [];
   const currentVars = {};

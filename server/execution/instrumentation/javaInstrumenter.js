@@ -1,19 +1,19 @@
 /**
  * Auto-instrumenter for Java Source Code (Javac / Java)
- * Injects step checkpoints that stream line executions, method scopes,
- * and synchronized console output.
+ * Injects step checkpoints as an inner static helper class, streaming line executions,
+ * method scopes, and synchronized console output.
  */
 
-const JAVA_PREAMBLE = `
-class _CodeLensTracer {
-    static int _cl_steps = 0;
-    public static void emitStep(int line, String func) {
-        if (_cl_steps++ > 500) return;
-        System.out.flush();
-        System.out.print(">>>CL_STEP:{\\"line\\":" + line + ",\\"func\\":\\"" + func + "\\",\\"vars\\":{}}:CL_STEP<<<\\n");
-        System.out.flush();
+const INNER_TRACER = `
+    static class _CodeLensTracer {
+        static int _cl_steps = 0;
+        public static void emitStep(int line, String func) {
+            if (_cl_steps++ > 500) return;
+            System.out.flush();
+            System.out.print(">>>CL_STEP:{\\"line\\":" + line + ",\\"func\\":\\"" + func + "\\",\\"vars\\":{}}:CL_STEP<<<\\n");
+            System.out.flush();
+        }
     }
-}
 `;
 
 export function instrumentJava(sourceCode) {
@@ -22,6 +22,7 @@ export function instrumentJava(sourceCode) {
   let currentMethod = 'main';
   let braceDepth = 0;
   let inClass = false;
+  let injectedTracer = false;
 
   for (let idx = 0; idx < rawLines.length; idx++) {
     const lineNum = idx + 1;
@@ -35,9 +36,24 @@ export function instrumentJava(sourceCode) {
     }
 
     // Class definition
-    if (trimmed.includes('class ') || trimmed.includes('interface ')) {
+    if ((trimmed.includes('class ') || trimmed.includes('interface ')) && !inClass) {
       inClass = true;
       instrumented.push(rawLine);
+      if (rawLine.includes('{') && !injectedTracer) {
+        instrumented.push(INNER_TRACER);
+        injectedTracer = true;
+      }
+      const openBraces = (rawLine.match(/\{/g) || []).length;
+      const closeBraces = (rawLine.match(/\}/g) || []).length;
+      braceDepth += (openBraces - closeBraces);
+      continue;
+    }
+
+    // If class opened on a subsequent line
+    if (inClass && !injectedTracer && rawLine.includes('{')) {
+      instrumented.push(rawLine);
+      instrumented.push(INNER_TRACER);
+      injectedTracer = true;
       const openBraces = (rawLine.match(/\{/g) || []).length;
       const closeBraces = (rawLine.match(/\}/g) || []).length;
       braceDepth += (openBraces - closeBraces);
@@ -47,7 +63,7 @@ export function instrumentJava(sourceCode) {
     // Method signature detection (when inside class, braceDepth === 1)
     if (inClass && braceDepth === 1) {
       const methodMatch = trimmed.match(/(?:public|private|protected|static|final|\s)+[\w<>\[\]]+\s+([a-zA-Z_]\w*)\s*\([^)]*\)\s*\{?/);
-      if (methodMatch) {
+      if (methodMatch && !trimmed.startsWith('for') && !trimmed.startsWith('while') && !trimmed.startsWith('if')) {
         currentMethod = methodMatch[1];
       }
     }
@@ -85,6 +101,5 @@ export function instrumentJava(sourceCode) {
     if (braceDepth <= 0) inClass = false;
   }
 
-  // Prepend _CodeLensTracer helper
-  return JAVA_PREAMBLE + '\n' + instrumented.join('\n');
+  return instrumented.join('\n');
 }

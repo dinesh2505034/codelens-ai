@@ -115,11 +115,69 @@ export async function runRealC(code, customInputs = '', options = {}) {
           timeoutMs: options.timeoutMs || 4000
         });
 
-        if (!instRunRes.timedOut && instRunRes.stdout) {
+        if (instRunRes.timedOut) {
+          const runTime = (((options.timeoutMs || 4000)) / 1000).toFixed(3);
+          const banner = `[Running] ${binaryFileName}\n\nExecution Timed Out (${runTime}s limit exceeded).\nPossible infinite loop or blocked input stream.\n[Done] exited with code=-1 in ${runTime} seconds`;
+          return {
+            error: 'TimeoutError',
+            exitCode: -1,
+            executionTime: `${runTime}s`,
+            compilerOutput: banner,
+            finalOutput: banner,
+            steps: [{
+              line: 1,
+              lineCode: rawLines[0] || '',
+              variables: {},
+              callStack: [{ frameName: 'main()', line: 1 }],
+              output: banner,
+              hasError: true,
+              errorType: 'TimeoutError',
+              explanation: 'Execution timed out. The program likely entered an infinite loop or exceeded CPU limit.'
+            }],
+            totalSteps: 1
+          };
+        }
+
+        if (instRunRes.stdout) {
           const parsed = parseInstrumentedTrace(instRunRes.stdout, rawLines);
           if (parsed.steps && parsed.steps.length > 0) {
-            synchronizedSteps = parsed.steps;
-            synchronizedFinalOutput = parsed.finalOutput;
+            const exitCode = instRunRes.exitCode;
+            let runtimeError = null;
+            if (exitCode !== 0) {
+              if (instRunRes.signal === 'SIGSEGV' || exitCode === 3221225477 || exitCode === 139) {
+                runtimeError = 'Segmentation Fault (SIGSEGV) - Attempted to access unallocated or restricted memory.';
+              } else if (instRunRes.signal === 'SIGFPE' || exitCode === 3221225620 || exitCode === 136) {
+                runtimeError = 'Floating Point Exception (SIGFPE) - Division by zero or arithmetic overflow.';
+              } else {
+                runtimeError = `Process terminated with exit code ${exitCode}${instRunRes.signal ? ` (Signal: ${instRunRes.signal})` : ''}`;
+              }
+            }
+
+            const lastStep = parsed.steps[parsed.steps.length - 1];
+            if (runtimeError) {
+              lastStep.hasError = true;
+              lastStep.errorType = 'RuntimeError';
+              lastStep.errorMessage = runtimeError;
+              lastStep.explanation = `❌ ${runtimeError}`;
+              lastStep.statusText = `Terminated with error (exit code ${exitCode})`;
+            } else {
+              lastStep.explanation = 'Execution completed successfully.';
+              lastStep.statusText = 'Execution finished';
+            }
+
+            const runTime = ((instRunRes.durationMs || 0) / 1000).toFixed(3);
+            const fullOutput = instRunRes.stderr ? `${parsed.finalOutput}\n${instRunRes.stderr}`.trim() : parsed.finalOutput;
+            const banner = `[Running] ${binaryFileName}\n${fullOutput}\n\n[Done] exited with code=${exitCode} in ${runTime} seconds`;
+
+            return {
+              steps: parsed.steps,
+              totalSteps: parsed.steps.length,
+              finalOutput: fullOutput,
+              compilerOutput: banner,
+              exitCode,
+              executionTime: `${runTime}s`,
+              error: runtimeError
+            };
           }
         }
       }
@@ -127,7 +185,7 @@ export async function runRealC(code, customInputs = '', options = {}) {
       // Fall through to original binary execution
     }
 
-    // 3. EXECUTION OF ORIGINAL BINARY (Ground truth stdout/stderr & crash check)
+    // 3. FALLBACK: EXECUTION OF ORIGINAL BINARY
     await new Promise((r) => setTimeout(r, 60));
     const runStartTime = Date.now();
     const timeoutMs = options.timeoutMs || 4000;
@@ -180,31 +238,6 @@ export async function runRealC(code, customInputs = '', options = {}) {
       } else {
         runtimeError = `Process terminated with exit code ${exitCode}${runRes.signal ? ` (Signal: ${runRes.signal})` : ''}`;
       }
-    }
-
-    // If synchronized steps are available, use them!
-    if (synchronizedSteps && synchronizedSteps.length > 0) {
-      const lastStep = synchronizedSteps[synchronizedSteps.length - 1];
-      if (runtimeError) {
-        lastStep.hasError = true;
-        lastStep.errorType = 'RuntimeError';
-        lastStep.errorMessage = runtimeError;
-        lastStep.explanation = `❌ ${runtimeError}`;
-        lastStep.statusText = `Terminated with error (exit code ${exitCode})`;
-      } else {
-        lastStep.explanation = 'Execution completed successfully.';
-        lastStep.statusText = 'Execution finished';
-      }
-
-      return {
-        steps: synchronizedSteps,
-        totalSteps: synchronizedSteps.length,
-        finalOutput: fullOutput || synchronizedFinalOutput,
-        compilerOutput: banner,
-        exitCode,
-        executionTime: `${runTime}s`,
-        error: runtimeError
-      };
     }
 
     // Fallback: build steps from source lines

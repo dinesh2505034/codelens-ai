@@ -96,7 +96,7 @@ export function runProcessWithLimits(command, args, options = {}) {
     let isSettled = false;
 
     let child = null;
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       try {
         child = spawn(command, args, {
           cwd,
@@ -106,8 +106,8 @@ export function runProcessWithLimits(command, args, options = {}) {
         });
         break;
       } catch (spawnErr) {
-        if (attempt < 4 && (spawnErr.code === 'UNKNOWN' || spawnErr.message.includes('UNKNOWN') || spawnErr.code === 'EBUSY' || spawnErr.code === 'EACCES')) {
-          await new Promise((r) => setTimeout(r, 50 * (attempt + 1)));
+        if (attempt < 9 && (spawnErr.code === 'UNKNOWN' || spawnErr.message.includes('UNKNOWN') || spawnErr.code === 'EBUSY' || spawnErr.code === 'EACCES')) {
+          await new Promise((r) => setTimeout(r, 60 * (attempt + 1)));
           continue;
         }
         return resolve({
