@@ -8,6 +8,7 @@ import { generateStepTrace } from './services/universalTraceEngine.js';
 import { analyzeCode, detectAndFixErrors } from './services/omniCodeAI.js';
 import { extractCodeWithTesseract } from './services/ocrService.js';
 import { saveShareSession, getShareSession } from './services/shareStore.js';
+import { detectEnvironment } from './execution/environment.js';
 
 dotenv.config();
 
@@ -34,14 +35,24 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', serverTime: new Date().toISOString(), engine: 'CodeLens AI Ready' });
 });
 
+// Runtime Environment Detection Endpoint
+app.get('/api/runtimes', (req, res) => {
+  try {
+    const env = detectEnvironment();
+    res.json(env);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to inspect runtimes', details: err.message });
+  }
+});
+
 // 1. Step-by-Step Visual Execution Trace
-app.post('/api/trace', (req, res) => {
+app.post('/api/trace', async (req, res) => {
   try {
     const { code, language, customInputs } = req.body;
     if (!code) {
       return res.status(400).json({ error: 'Code is required' });
     }
-    const trace = generateStepTrace(code, language, customInputs);
+    const trace = await generateStepTrace(code, language, customInputs);
     return res.json(trace);
   } catch (err) {
     console.error('Trace error:', err);
