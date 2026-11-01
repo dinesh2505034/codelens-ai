@@ -53,6 +53,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const playTimerRef = useRef(null);
+  const debugTimerRef = useRef(null);
 
   // Apply Theme class to <html>
   useEffect(() => {
@@ -151,7 +152,11 @@ export default function App() {
     setHasExecuted(false);
     setIsPlaying(false);
     setCustomInputs('');
-    runBackgroundDebugCheck(newCode, language);
+
+    if (debugTimerRef.current) clearTimeout(debugTimerRef.current);
+    debugTimerRef.current = setTimeout(() => {
+      runBackgroundDebugCheck(newCode, language);
+    }, 450);
   };
 
   // Handle Language changes
@@ -349,6 +354,7 @@ export default function App() {
             onRun={handleRun}
             onStop={handleStop}
             errors={debugData?.issues || []}
+            theme={theme}
           />
         </section>
 

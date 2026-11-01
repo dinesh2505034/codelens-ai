@@ -48,7 +48,7 @@ export async function runRealCpp(code, customInputs = '', options = {}) {
     const compileRes = await runProcessWithLimits(compilerInfo.binPath, compileArgs, {
       cwd: sandboxDir,
       env,
-      timeoutMs: options.compileTimeoutMs || 10000
+      timeoutMs: options.compileTimeoutMs || 15000
     });
 
     const compileTime = ((Date.now() - compileStartTime) / 1000).toFixed(3);
@@ -103,7 +103,7 @@ export async function runRealCpp(code, customInputs = '', options = {}) {
       const instCompRes = await runProcessWithLimits(compilerInfo.binPath, ['-std=c++17', '-O0', instSrcName, '-o', instBinName], {
         cwd: sandboxDir,
         env,
-        timeoutMs: 10000
+        timeoutMs: 15000
       });
 
       if (instCompRes.exitCode === 0 && fs.existsSync(instBinPath)) {

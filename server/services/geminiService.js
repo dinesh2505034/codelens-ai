@@ -46,8 +46,55 @@ ${code}
 
   const result = await model.generateContent(prompt);
   const text = result.response.text();
-  const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
-  return JSON.parse(cleaned);
+  const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+  const parsed = JSON.parse(cleaned);
+  parsed.engine = 'Google Gemini 1.5 Flash';
+  return parsed;
+}
+
+export async function debugWithGemini(code, language, compilerOutput, apiKey) {
+  const key = apiKey || process.env.GEMINI_API_KEY;
+  if (!key) {
+    throw new Error('No Gemini API key provided.');
+  }
+
+  const genAI = new GoogleGenerativeAI(key);
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+  const prompt = `You are an expert compiler and software debugger. Analyze the following ${language} source code and any compiler/runtime errors provided below.
+Find all syntax errors, type errors, semantic bugs, or infinite loop hazards.
+Provide clear diagnostic explanations and the complete corrected/repaired source code.
+
+Source Code:
+\`\`\`${language}
+${code}
+\`\`\`
+
+Compiler / Linter Diagnostic:
+${compilerOutput || 'None provided'}
+
+Return your response ONLY in valid JSON matching this schema:
+{
+  "hasErrors": boolean,
+  "issues": [
+    {
+      "line": 1,
+      "severity": "Critical Error" | "Warning" | "Logic Bug",
+      "type": "Error type name (e.g. SyntaxError, Type Mismatch)",
+      "message": "Clear explanation of what is wrong",
+      "suggestion": "Specific suggestion on how to fix"
+    }
+  ],
+  "fixedCode": "the complete source code with all bugs fixed so it compiles and runs correctly"
+}`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+  const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+  const parsed = JSON.parse(cleaned);
+  parsed.engine = 'Google Gemini AI Debugger';
+  parsed.issueCount = parsed.issues ? parsed.issues.length : 0;
+  return parsed;
 }
 
 export async function extractCodeFromImageGemini(imageBuffer, mimeType, apiKey) {

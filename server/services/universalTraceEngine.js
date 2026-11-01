@@ -1,4 +1,4 @@
-﻿import { executeProgram } from '../execution/executionService.js';
+import { executeProgram } from '../execution/executionService.js';
 
 /**
  * Universal Step Trace & Compiler Execution Engine
@@ -70,15 +70,18 @@ function enrichTraceSteps(rawSteps, rawLines, lang, meta = {}, customInputs = ''
     };
   });
 
+  const hasErr = meta.error || meta.hasError || (enriched.length > 0 && enriched.some(s => s.hasError));
   return { 
     totalSteps, 
     steps: enriched,
+    error: meta.error || (hasErr ? (enriched[0]?.errorType || 'RuntimeError') : null),
+    hasError: Boolean(hasErr),
     isWaitingForInput: isWaiting,
     inputPrompt: meta.inputPrompt || '',
     compilerOutput: meta.compilerOutput || (enriched.length > 0 ? enriched[enriched.length - 1].output : ''),
     finalOutput: meta.finalOutput || (enriched.length > 0 ? enriched[enriched.length - 1].output : ''),
     executionTime: meta.executionTime || '0.012s',
-    exitCode: meta.exitCode !== undefined ? meta.exitCode : 0
+    exitCode: meta.exitCode !== undefined ? meta.exitCode : (hasErr ? 1 : 0)
   };
 }
 

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { generateStepTrace } from './services/universalTraceEngine.js';
 import { analyzeCode, detectAndFixErrors } from './services/omniCodeAI.js';
+import { explainWithGemini, debugWithGemini } from './services/geminiService.js';
 import { extractCodeWithTesseract } from './services/ocrService.js';
 import { saveShareSession, getShareSession } from './services/shareStore.js';
 import { detectEnvironment } from './execution/environment.js';
@@ -60,12 +61,22 @@ app.post('/api/trace', async (req, res) => {
   }
 });
 
-// 2. Deep Code Explanation & Complexity (CodeLens Native AI)
-app.post('/api/explain', (req, res) => {
+// 2. Deep Code Explanation & Complexity (CodeLens Native AI + Gemini)
+app.post('/api/explain', async (req, res) => {
   try {
-    const { code, language } = req.body;
+    const { code, language, apiKey, useCloud } = req.body;
     if (!code) {
       return res.status(400).json({ error: 'Code is required' });
+    }
+
+    const key = apiKey || process.env.GEMINI_API_KEY;
+    if (key) {
+      try {
+        const geminiResult = await explainWithGemini(code, language, key);
+        return res.json(geminiResult);
+      } catch (aiErr) {
+        console.warn('Gemini explain error, falling back to dynamic native engine:', aiErr.message);
+      }
     }
 
     const result = analyzeCode(code, language);
@@ -76,15 +87,36 @@ app.post('/api/explain', (req, res) => {
   }
 });
 
-// 3. Error Detection & 1-Click Debugger
-app.post('/api/debug', (req, res) => {
+// 3. Error Detection & 1-Click Debugger (Real Compiler/Linter Diagnostics + Gemini)
+app.post('/api/debug', async (req, res) => {
   try {
-    const { code, language } = req.body;
+    const { code, language, apiKey } = req.body;
     if (!code) {
       return res.status(400).json({ error: 'Code is required' });
     }
-    const debugResult = detectAndFixErrors(code, language);
-    return res.json(debugResult);
+
+    // 1. Run real compiler/linter diagnostics
+    const nativeDebug = detectAndFixErrors(code, language);
+
+    // 2. If Gemini API key is available and issues were found or requested, augment with AI
+    const key = apiKey || process.env.GEMINI_API_KEY;
+    if (key && nativeDebug.hasErrors) {
+      try {
+        const compilerOutput = nativeDebug.issues.map(i => `Line ${i.line}: ${i.type} - ${i.message}`).join('\n');
+        const aiDebug = await debugWithGemini(code, language, compilerOutput, key);
+        return res.json({
+          ...nativeDebug,
+          ...aiDebug,
+          issues: (aiDebug.issues && aiDebug.issues.length > 0) ? aiDebug.issues : nativeDebug.issues,
+          fixedCode: aiDebug.fixedCode || nativeDebug.fixedCode,
+          engine: 'Google Gemini AI Debugger'
+        });
+      } catch (aiErr) {
+        console.warn('Gemini debug error, using native compiler diagnostic:', aiErr.message);
+      }
+    }
+
+    return res.json(nativeDebug);
   } catch (err) {
     console.error('Debug error:', err);
     return res.status(500).json({ error: 'Failed to debug code', details: err.message });

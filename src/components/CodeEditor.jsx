@@ -1,22 +1,13 @@
-﻿import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import Editor from '@monaco-editor/react';
 import { 
   Play, 
   Square, 
-  RotateCcw, 
   Copy, 
   Check, 
   FileCode2, 
-  Sparkles,
   AlertCircle
 } from 'lucide-react';
-
-const FONT_STYLE = {
-  fontFamily: '"Fira Code", monospace',
-  fontSize: '14px',
-  lineHeight: '24px',
-  letterSpacing: '0px',
-  tabSize: 4
-};
 
 export default function CodeEditor({
   code,
@@ -26,27 +17,15 @@ export default function CodeEditor({
   isRunning = false,
   onRun,
   onStop,
-  errors = []
+  errors = [],
+  theme = 'light'
 }) {
   const [copied, setCopied] = useState(false);
-  const overlayRef = useRef(null);
-  const textareaRef = useRef(null);
+  const editorRef = useRef(null);
+  const monacoRef = useRef(null);
+  const decorationsRef = useRef([]);
 
-  const lines = code.split('\n');
-
-  // Synchronize textarea scroll with syntax highlighter overlay
-  const handleScroll = () => {
-    if (textareaRef.current && overlayRef.current) {
-      overlayRef.current.scrollTop = textareaRef.current.scrollTop;
-      overlayRef.current.scrollLeft = textareaRef.current.scrollLeft;
-    }
-  };
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const lines = (code || '').split('\n');
 
   const getFileName = () => {
     switch (language) {
@@ -57,62 +36,90 @@ export default function CodeEditor({
     }
   };
 
-  // Syntax highlighter tokens generator
-  const renderHighlightedLine = (lineStr, lineNum) => {
-    const isCurrentLine = activeLine === lineNum;
-    const hasErrorOnLine = errors.some(e => e.line === lineNum);
-    const tokens = tokenizeLine(lineStr, language);
+  const getMonacoLang = () => {
+    switch (language) {
+      case 'cpp': return 'cpp';
+      case 'c': return 'c';
+      case 'java': return 'java';
+      default: return 'python';
+    }
+  };
 
-    return (
-      <div 
-        key={lineNum} 
-        style={{ height: '24px', lineHeight: '24px' }}
-        className={`relative flex items-center px-4 w-full select-none ${
-          isCurrentLine 
-            ? 'bg-emerald-500/15 text-emerald-950 dark:text-emerald-100 font-semibold' 
-            : hasErrorOnLine
-            ? 'bg-red-500/10 text-red-950 dark:text-red-100'
-            : ''
-        }`}
-      >
-        {/* Active Line Left Marker Pointer */}
-        {isCurrentLine && (
-          <div className="absolute left-1 top-0 bottom-0 flex items-center pointer-events-none">
-            <span className="text-emerald-600 dark:text-emerald-400 text-xs font-black animate-pulse">▶</span>
-          </div>
-        )}
+  const handleEditorDidMount = (editor, monaco) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
 
-        {/* Syntax Highlighted Text */}
-        <div className="whitespace-pre">
-          {tokens.map((token, tIdx) => (
-            <span key={tIdx} className={token.className}>
-              {token.text}
-            </span>
-          ))}
-          {lineStr.length === 0 && <span>&nbsp;</span>}
-        </div>
+    // Apply initial decorations and markers
+    updateActiveLine(activeLine, isRunning, editor, monaco);
+    updateErrorMarkers(errors, editor, monaco);
+  };
 
-        {/* Active Line Right Indicator Badge */}
-        {isCurrentLine && (
-          <div className="absolute right-4 top-0 bottom-0 flex items-center pointer-events-none select-none">
-            <span className="bg-emerald-600 dark:bg-emerald-500 text-white dark:text-dark-950 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider font-extrabold shadow-sm mr-1">
-              Active
-            </span>
-            <span className="text-emerald-600 dark:text-emerald-400 text-xs font-black">◄</span>
-          </div>
-        )}
+  const updateActiveLine = (line, running, editor, monaco) => {
+    if (!editor || !monaco) return;
 
-        {/* Error icon on line */}
-        {hasErrorOnLine && !isCurrentLine && (
-          <div 
-            className="absolute right-4 top-0 bottom-0 flex items-center text-red-500 dark:text-red-400 pointer-events-auto cursor-help" 
-            title={errors.find(e => e.line === lineNum)?.message || 'Detected issue on this line'}
-          >
-            <AlertCircle className="w-3.5 h-3.5" />
-          </div>
-        )}
-      </div>
-    );
+    if (running && line && line > 0) {
+      const newDecorations = [
+        {
+          range: new monaco.Range(line, 1, line, 1),
+          options: {
+            isWholeLine: true,
+            className: 'monaco-active-line-bg',
+            glyphMarginClassName: 'monaco-active-glyph',
+            overviewRuler: {
+              color: '#10b981',
+              position: monaco.editor.OverviewRulerLane.Full
+            }
+          }
+        }
+      ];
+      decorationsRef.current = editor.deltaDecorations(decorationsRef.current, newDecorations);
+      editor.revealLineInCenterIfOutsideViewport(line);
+    } else {
+      decorationsRef.current = editor.deltaDecorations(decorationsRef.current, []);
+    }
+  };
+
+  const updateErrorMarkers = (errList, editor, monaco) => {
+    if (!editor || !monaco) return;
+    const model = editor.getModel();
+    if (!model) return;
+
+    if (errList && errList.length > 0) {
+      const markers = errList.map(err => {
+        const line = Math.max(1, Math.min(err.line || 1, model.getLineCount()));
+        const col = Math.max(1, err.column || 1);
+        const lineLen = model.getLineLength(line) || 10;
+        return {
+          startLineNumber: line,
+          startColumn: col,
+          endLineNumber: line,
+          endColumn: lineLen + 1,
+          message: `${err.type ? `[${err.type}] ` : ''}${err.message || 'Compiler issue detected'}`,
+          severity: err.severity?.toLowerCase().includes('warning') 
+            ? monaco.MarkerSeverity.Warning 
+            : monaco.MarkerSeverity.Error
+        };
+      });
+      monaco.editor.setModelMarkers(model, 'compiler', markers);
+    } else {
+      monaco.editor.setModelMarkers(model, 'compiler', []);
+    }
+  };
+
+  // Sync active line whenever step changes
+  useEffect(() => {
+    updateActiveLine(activeLine, isRunning, editorRef.current, monacoRef.current);
+  }, [activeLine, isRunning]);
+
+  // Sync compiler error markers whenever error diagnostics change
+  useEffect(() => {
+    updateErrorMarkers(errors, editorRef.current, monacoRef.current);
+  }, [errors]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -126,6 +133,12 @@ export default function CodeEditor({
             <span>{getFileName()}</span>
           </div>
           <span className="text-xs text-slate-500 font-mono">({lines.length} lines)</span>
+          {errors.length > 0 && (
+            <span className="flex items-center space-x-1 text-xs text-red-500 font-mono bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded border border-red-200 dark:border-red-800/40">
+              <AlertCircle className="w-3 h-3" />
+              <span>{errors.length} {errors.length === 1 ? 'issue' : 'issues'}</span>
+            </span>
+          )}
         </div>
 
         {/* Action Buttons: Copy, Stop, Run */}
@@ -158,108 +171,37 @@ export default function CodeEditor({
         </div>
       </div>
 
-      {/* Editor Body */}
-      <div className="relative flex-1 flex overflow-hidden">
-        {/* Line Number Gutter */}
-        <div 
-          style={{ paddingTop: '12px', paddingBottom: '12px' }}
-          className="w-12 bg-slate-50/80 dark:bg-dark-950/60 border-r border-slate-200/80 dark:border-dark-800 text-right pr-3 select-none flex flex-col pointer-events-none"
-        >
-          {lines.map((_, idx) => {
-            const lineNum = idx + 1;
-            const isCurrent = activeLine === lineNum;
-            const hasError = errors.some(e => e.line === lineNum);
-
-            return (
-              <div 
-                key={idx} 
-                style={{ height: '24px', lineHeight: '24px', fontSize: '13px', ...FONT_STYLE }}
-                className={`transition-colors ${
-                  isCurrent 
-                    ? 'text-emerald-700 dark:text-emerald-400 font-bold' 
-                    : hasError 
-                    ? 'text-red-500 dark:text-red-400 font-bold' 
-                    : 'text-slate-400 dark:text-slate-600'
-                }`}
-              >
-                {lineNum}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Code Container with Perfectly Aligned Overlay & Textarea */}
-        <div className="relative flex-1 h-full overflow-hidden">
-          {/* Highlighted Overlay Layer */}
-          <div 
-            ref={overlayRef}
-            style={{ 
-              paddingTop: '12px', 
-              paddingBottom: '12px',
-              ...FONT_STYLE
-            }}
-            className="absolute inset-0 pointer-events-none select-none overflow-hidden whitespace-pre"
-          >
-            {lines.map((lineStr, idx) => renderHighlightedLine(lineStr, idx + 1))}
-          </div>
-
-          {/* Transparent Interactive Textarea Layer */}
-          <textarea
-            ref={textareaRef}
-            value={code}
-            onChange={(e) => onChange(e.target.value)}
-            onScroll={handleScroll}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoComplete="off"
-            autoCorrect="off"
-            style={{ 
-              paddingTop: '12px', 
-              paddingBottom: '12px',
-              paddingLeft: '16px',
-              paddingRight: '16px',
-              ...FONT_STYLE,
-              color: 'transparent',
-              caretColor: '#2563eb'
-            }}
-            className="relative z-10 w-full h-full bg-transparent resize-none focus:outline-none overflow-auto whitespace-pre selection:bg-blue-500/25 selection:text-transparent"
-          />
-        </div>
+      {/* Editor Body with Monaco */}
+      <div className="relative flex-1 h-full overflow-hidden">
+        <Editor
+          height="100%"
+          language={getMonacoLang()}
+          theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+          value={code}
+          onChange={(newVal) => onChange(newVal || '')}
+          onMount={handleEditorDidMount}
+          options={{
+            fontSize: 14,
+            fontFamily: '"Fira Code", "Cascadia Code", Consolas, monospace',
+            lineHeight: 24,
+            tabSize: 4,
+            insertSpaces: true,
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            glyphMargin: true,
+            renderLineHighlight: 'all',
+            minimap: { enabled: false },
+            bracketPairColorization: { enabled: true },
+            smoothScrolling: true,
+            cursorBlinking: 'smooth',
+            wordWrap: 'on',
+            scrollbar: {
+              verticalScrollbarSize: 8,
+              horizontalScrollbarSize: 8
+            }
+          }}
+        />
       </div>
     </div>
   );
-}
-
-// ----------------------------------------------------
-// Precise Syntax Tokenizer
-// ----------------------------------------------------
-
-function tokenizeLine(line, lang) {
-  if (!line) return [{ text: '', className: '' }];
-
-  const tokens = [];
-  const regex = /(\b(?:def|class|if|elif|else|while|for|return|import|from|as|in|try|except|finally|public|static|void|int|float|double|char|bool|include|vector|string|std|cout|cin|printf|scanf|System|out|println|new|let|const|var|function)\b)|(\b\d+\b)|(["'].*?["'])|([#//].*)|([+\-*/%=!<>]+)|([a-zA-Z_]\w*)|(\s+)|(.)/g;
-
-  let match;
-  while ((match = regex.exec(line)) !== null) {
-    const [full, keyword, number, str, comment, operator, identifier, whitespace, other] = match;
-
-    if (keyword) {
-      tokens.push({ text: keyword, className: 'text-purple-700 dark:text-purple-400 font-semibold' });
-    } else if (number) {
-      tokens.push({ text: number, className: 'text-amber-600 dark:text-amber-300 font-medium' });
-    } else if (str) {
-      tokens.push({ text: str, className: 'text-emerald-700 dark:text-emerald-300 font-medium' });
-    } else if (comment) {
-      tokens.push({ text: comment, className: 'text-slate-400 dark:text-slate-500 italic' });
-    } else if (operator) {
-      tokens.push({ text: operator, className: 'text-blue-600 dark:text-brand-cyan font-bold' });
-    } else if (identifier) {
-      tokens.push({ text: identifier, className: 'text-slate-900 dark:text-blue-200' });
-    } else {
-      tokens.push({ text: full, className: 'text-slate-800 dark:text-slate-300' });
-    }
-  }
-
-  return tokens.length > 0 ? tokens : [{ text: line, className: 'text-slate-800 dark:text-slate-200' }];
 }
