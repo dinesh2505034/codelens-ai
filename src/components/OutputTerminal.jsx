@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Terminal, Copy, Check, CornerDownLeft } from 'lucide-react';
 
 export default function OutputTerminal({ 
@@ -42,71 +42,82 @@ export default function OutputTerminal({
   };
 
   return (
-    <div className="p-3 bg-white dark:bg-dark-900 border-b border-slate-200 dark:border-dark-750 transition-colors select-none">
-      {/* Outer Actual Terminal Box matching reference screenshots */}
-      <div className={`relative border rounded-xl p-3 bg-slate-900 dark:bg-[#12141a] text-slate-100 shadow-sm overflow-hidden transition-all ${
+    <div className="flex flex-col h-full w-full bg-[var(--bg-surface)] p-3 select-none">
+      {/* Terminal Block - Engineering Grade */}
+      <div className={`flex-1 flex flex-col rounded-lg border bg-[var(--bg-app)] overflow-hidden transition-all ${
         isWaitingForInput 
-          ? 'border-emerald-500/80 ring-1 ring-emerald-500/40' 
-          : 'border-slate-300 dark:border-slate-750'
+          ? 'border-[#5B6CFF] ring-1 ring-[#5B6CFF]/30' 
+          : 'border-[var(--border-color)]'
       }`}>
-        {/* Floating "Output" label in red matching reference images */}
-        <div className="flex items-center justify-between mb-2">
+        {/* Terminal Header Bar */}
+        <div className="h-8 px-3 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-elevated)]">
           <div className="flex items-center space-x-2">
-            <span className="text-red-400 font-mono text-[11px] font-bold">
-              Output
+            <span className="text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)] font-medium">
+              Terminal Output
             </span>
+            {exitCode !== undefined && (
+              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded border ${
+                exitCode === 0 
+                  ? 'text-[var(--status-success)] bg-[var(--status-success-bg)] border-[var(--status-success-border)]'
+                  : 'text-[var(--status-error)] bg-[var(--status-error-bg)] border-[var(--status-error-border)]'
+              }`}>
+                exit: {exitCode}
+              </span>
+            )}
+            {executionTime && (
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                {executionTime}
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center space-x-2 text-[11px] font-mono">
+          <div className="flex items-center space-x-1">
             {output && (
               <button
                 type="button"
                 onClick={handleCopy}
-                className="p-1 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
-                title="Copy output"
+                className="p-1 rounded-[4px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--accent-subtle)] cursor-pointer"
+                title="Copy terminal output"
               >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? <Check className="w-3.5 h-3.5 text-[var(--status-success)]" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
             )}
           </div>
         </div>
 
-        {/* Real Terminal Output Console Area */}
+        {/* Monospace Output Text Area */}
         <div 
           ref={terminalRef}
-          className="font-mono text-xs text-slate-200 min-h-[56px] max-h-36 overflow-y-auto whitespace-pre-wrap selection:bg-blue-500/30 leading-5 pt-1 scroll-smooth select-text"
+          className="flex-1 p-3 font-mono text-xs text-[var(--text-main)] overflow-y-auto whitespace-pre-wrap leading-relaxed select-text min-h-[140px]"
         >
-          {output && <div>{output}</div>}
-
-          {/* Interactive In-Terminal Input Row (When code calls input() / cin / scanf) */}
-          {isWaitingForInput && (
-            <form onSubmit={handleSubmit} className="flex items-center justify-between mt-1 pt-1 border-t border-slate-800">
-              <div className="flex items-center space-x-1.5 flex-1 mr-3">
-                <span className="text-emerald-400 font-bold">{inputPrompt || '>'}</span>
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={interactiveVal}
-                  onChange={(e) => setInteractiveVal(e.target.value)}
-                  placeholder="Type input value here and press Enter or Submit..."
-                  className="flex-1 bg-transparent border-none text-xs font-mono text-white focus:outline-none placeholder:text-slate-500"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="px-3.5 py-1 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 cursor-pointer flex items-center space-x-1"
-              >
-                <span>Submit</span>
-                <CornerDownLeft className="w-3 h-3 ml-0.5" />
-              </button>
-            </form>
+          {output ? (
+            <div>{output}</div>
+          ) : (
+            <div className="text-[var(--text-muted)] opacity-50 italic">
+              No console output generated.
+            </div>
           )}
 
-          {!output && !isWaitingForInput && (
-            <div className="text-slate-500 italic py-2">
-              Terminal output will display here as execution proceeds...
-            </div>
+          {/* Stdin Interactive Input Field */}
+          {isWaitingForInput && (
+            <form onSubmit={handleSubmit} className="flex items-center space-x-2 mt-2 pt-2 border-t border-[var(--border-color)]">
+              <span className="text-[#5B6CFF] font-bold">{inputPrompt || '>'}</span>
+              <input
+                ref={inputRef}
+                type="text"
+                value={interactiveVal}
+                onChange={(e) => setInteractiveVal(e.target.value)}
+                placeholder="Enter input..."
+                className="flex-1 bg-transparent border-none text-xs font-mono text-[var(--text-main)] focus:outline-none placeholder:text-[var(--text-muted)]"
+              />
+              <button
+                type="submit"
+                className="px-2.5 py-1 bg-[#5B6CFF] hover:bg-[#4858EC] text-white text-xs font-medium rounded-[4px] cursor-pointer flex items-center space-x-1"
+              >
+                <span>Send</span>
+                <CornerDownLeft className="w-3 h-3" />
+              </button>
+            </form>
           )}
         </div>
       </div>

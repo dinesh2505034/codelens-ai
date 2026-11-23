@@ -1,8 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { 
-  Play, 
-  Square, 
   Copy, 
   Check, 
   FileCode2, 
@@ -18,7 +16,7 @@ export default function CodeEditor({
   onRun,
   onStop,
   errors = [],
-  theme = 'light'
+  theme = 'dark'
 }) {
   const [copied, setCopied] = useState(false);
   const editorRef = useRef(null);
@@ -49,10 +47,67 @@ export default function CodeEditor({
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    // Apply initial decorations and markers
+    // Define custom VS Code-like engineering theme matching the exact color system
+    monaco.editor.defineTheme('codelens-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '5F6875', fontStyle: 'italic' },
+        { token: 'keyword', foreground: '7C8BFF' },
+        { token: 'string', foreground: '86E1A0' },
+        { token: 'number', foreground: 'F1B56E' },
+        { token: 'type', foreground: '79C0FF' },
+        { token: 'function', foreground: 'D2A8FF' }
+      ],
+      colors: {
+        'editor.background': '#12151A',
+        'editor.foreground': '#E6E8EB',
+        'editorGutter.background': '#12151A',
+        'editorLineNumber.foreground': '#5F6875',
+        'editorLineNumber.activeForeground': '#E6E8EB',
+        'editor.lineHighlightBackground': '#181C22',
+        'editor.selectionBackground': '#5B6CFF33',
+        'editorCursor.foreground': '#5B6CFF',
+        'editorOverviewRuler.border': '#232830'
+      }
+    });
+
+    monaco.editor.defineTheme('codelens-light', {
+      base: 'vs',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '8B93A0', fontStyle: 'italic' },
+        { token: 'keyword', foreground: '4858EC' },
+        { token: 'string', foreground: '16A34A' },
+        { token: 'number', foreground: 'D97706' },
+        { token: 'type', foreground: '0284C7' },
+        { token: 'function', foreground: '7C3AED' }
+      ],
+      colors: {
+        'editor.background': '#F7F8FA',
+        'editor.foreground': '#14171C',
+        'editorGutter.background': '#F7F8FA',
+        'editorLineNumber.foreground': '#8B93A0',
+        'editorLineNumber.activeForeground': '#14171C',
+        'editor.lineHighlightBackground': '#FFFFFF',
+        'editor.selectionBackground': '#5B6CFF26',
+        'editorCursor.foreground': '#5B6CFF',
+        'editorOverviewRuler.border': '#E3E6EB'
+      }
+    });
+
+    monaco.editor.setTheme(theme === 'dark' ? 'codelens-dark' : 'codelens-light');
+
     updateActiveLine(activeLine, isRunning, editor, monaco);
     updateErrorMarkers(errors, editor, monaco);
   };
+
+  // Sync theme changes with Monaco
+  useEffect(() => {
+    if (monacoRef.current) {
+      monacoRef.current.editor.setTheme(theme === 'dark' ? 'codelens-dark' : 'codelens-light');
+    }
+  }, [theme]);
 
   const updateActiveLine = (line, running, editor, monaco) => {
     if (!editor || !monaco) return;
@@ -66,7 +121,7 @@ export default function CodeEditor({
             className: 'monaco-active-line-bg',
             glyphMarginClassName: 'monaco-active-glyph',
             overviewRuler: {
-              color: '#10b981',
+              color: '#5B6CFF',
               position: monaco.editor.OverviewRulerLane.Full
             }
           }
@@ -94,7 +149,7 @@ export default function CodeEditor({
           startColumn: col,
           endLineNumber: line,
           endColumn: lineLen + 1,
-          message: `${err.type ? `[${err.type}] ` : ''}${err.message || 'Compiler issue detected'}`,
+          message: `${err.type ? `[${err.type}] ` : ''}${err.message || 'Issue detected'}`,
           severity: err.severity?.toLowerCase().includes('warning') 
             ? monaco.MarkerSeverity.Warning 
             : monaco.MarkerSeverity.Error
@@ -106,12 +161,10 @@ export default function CodeEditor({
     }
   };
 
-  // Sync active line whenever step changes
   useEffect(() => {
     updateActiveLine(activeLine, isRunning, editorRef.current, monacoRef.current);
   }, [activeLine, isRunning]);
 
-  // Sync compiler error markers whenever error diagnostics change
   useEffect(() => {
     updateErrorMarkers(errors, editorRef.current, monacoRef.current);
   }, [errors]);
@@ -123,67 +176,53 @@ export default function CodeEditor({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-750 rounded-xl overflow-hidden shadow-md dark:shadow-xl transition-colors">
-      {/* Editor Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-dark-850 border-b border-slate-200 dark:border-dark-750 select-none">
-        {/* Tab with Filename */}
+    <div className="flex flex-col h-full w-full bg-[var(--bg-surface)] overflow-hidden select-none">
+      {/* Slim 36px File Tab Header - Flush, Engineering-Grade */}
+      <div className="h-9 px-3 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-surface)]">
+        {/* Tab with active file */}
         <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-1.5 px-3 py-1 bg-white dark:bg-dark-950 text-blue-700 dark:text-brand-cyan text-xs font-mono font-medium rounded-t-md border-t-2 border-blue-600 dark:border-brand-cyan shadow-sm">
-            <FileCode2 className="w-3.5 h-3.5" />
+          <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-[var(--bg-elevated)] border-r border-l first:border-l-0 border-[var(--border-color)] text-[var(--text-main)] text-xs font-mono font-medium">
+            <FileCode2 className="w-3.5 h-3.5 text-[#5B6CFF]" />
             <span>{getFileName()}</span>
           </div>
-          <span className="text-xs text-slate-500 font-mono">({lines.length} lines)</span>
+
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">
+            {lines.length} {lines.length === 1 ? 'line' : 'lines'}
+          </span>
+
           {errors.length > 0 && (
-            <span className="flex items-center space-x-1 text-xs text-red-500 font-mono bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded border border-red-200 dark:border-red-800/40">
+            <span className="flex items-center space-x-1 text-[11px] text-[var(--status-error)] font-mono px-1.5 py-0.2 rounded bg-[var(--status-error-bg)] border border-[var(--status-error-border)]">
               <AlertCircle className="w-3 h-3" />
-              <span>{errors.length} {errors.length === 1 ? 'issue' : 'issues'}</span>
+              <span>{errors.length}</span>
             </span>
           )}
         </div>
 
-        {/* Action Buttons: Copy, Stop, Run */}
-        <div className="flex items-center space-x-2">
+        {/* Copy Button */}
+        <div className="flex items-center space-x-1">
           <button
             onClick={handleCopy}
-            className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-dark-750 transition-colors cursor-pointer"
+            className="p-1 rounded-[4px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--accent-subtle)] cursor-pointer"
             title="Copy code"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? <Check className="w-3.5 h-3.5 text-[var(--status-success)]" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
-
-          {isRunning ? (
-            <button
-              onClick={onStop}
-              className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-red-500 hover:bg-red-600 text-white shadow-xs transition-all active:scale-95 cursor-pointer"
-            >
-              <Square className="w-3.5 h-3.5 fill-current" />
-              <span>Stop</span>
-            </button>
-          ) : (
-            <button
-              onClick={onRun}
-              className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 dark:bg-brand-blue dark:hover:bg-blue-600 text-white shadow-xs hover:shadow-blue-500/25 transition-all active:scale-95 cursor-pointer"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Run</span>
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Editor Body with Monaco */}
-      <div className="relative flex-1 h-full overflow-hidden">
+      {/* Monaco Editor Container */}
+      <div className="relative flex-1 h-full w-full overflow-hidden">
         <Editor
           height="100%"
           language={getMonacoLang()}
-          theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+          theme={theme === 'dark' ? 'codelens-dark' : 'codelens-light'}
           value={code}
           onChange={(newVal) => onChange(newVal || '')}
           onMount={handleEditorDidMount}
           options={{
-            fontSize: 14,
-            fontFamily: '"Fira Code", "Cascadia Code", Consolas, monospace',
-            lineHeight: 24,
+            fontSize: 13,
+            fontFamily: '"JetBrains Mono", "Fira Code", Menlo, monospace',
+            lineHeight: 22,
             tabSize: 4,
             insertSpaces: true,
             scrollBeyondLastLine: false,
@@ -195,9 +234,10 @@ export default function CodeEditor({
             smoothScrolling: true,
             cursorBlinking: 'smooth',
             wordWrap: 'on',
+            padding: { top: 8, bottom: 8 },
             scrollbar: {
-              verticalScrollbarSize: 8,
-              horizontalScrollbarSize: 8
+              verticalScrollbarSize: 5,
+              horizontalScrollbarSize: 5
             }
           }}
         />

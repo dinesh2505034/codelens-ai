@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Layers, Database, ZoomIn, ZoomOut, RotateCcw, Box } from 'lucide-react';
 
 export default function VisualStateMemory({
@@ -10,160 +10,190 @@ export default function VisualStateMemory({
   const [zoomLevel, setZoomLevel] = useState(100);
 
   const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 10, 150));
-  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 10, 70));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 10, 80));
   const handleZoomReset = () => setZoomLevel(100);
 
   const varEntries = Object.entries(variables || {});
 
+  const inferType = (val) => {
+    if (typeof val === 'number') return Number.isInteger(val) ? 'int' : 'float';
+    if (typeof val === 'boolean') return 'bool';
+    if (typeof val === 'string') return 'str';
+    if (Array.isArray(val)) return `list[${val.length}]`;
+    if (typeof val === 'object' && val !== null) return 'object';
+    return typeof val;
+  };
+
   return (
-    <div className="relative flex-1 flex flex-col p-4 bg-white dark:bg-dark-900 overflow-hidden select-none min-h-[220px] transition-colors">
-      {/* Zoomable Container */}
-      <div 
-        className="flex-1 flex flex-col items-center justify-center overflow-auto p-2 transition-transform duration-200"
-        style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'center center' }}
-      >
-        {/* Main Stack Block Frame (matching reference screenshot dotted box) */}
-        <div className="w-full max-w-md border border-dashed border-slate-300 dark:border-slate-600/80 rounded-xl p-4 bg-slate-50 dark:bg-dark-950/60 shadow-sm dark:shadow-lg relative">
-          {/* Block Header */}
-          <div className="flex items-center justify-between mb-3 border-b border-slate-200 dark:border-dark-800 pb-2">
-            <div className="flex items-center space-x-2">
-              <Layers className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-              <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200 tracking-wider">
-                {callStack && callStack.length > 0 ? callStack[callStack.length - 1].frameName : 'Main Block'}
-              </span>
-            </div>
-            {callStack && callStack.length > 1 && (
-              <span className="text-[10px] font-mono bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-500/30">
-                Stack Depth: {callStack.length}
-              </span>
-            )}
-          </div>
-
-          {/* Variables Section */}
-          <div className="mb-2">
-            <div className="flex items-center space-x-1 mb-2">
-              <Database className="w-3 h-3 text-blue-600 dark:text-brand-cyan" />
-              <span className="text-xs font-mono font-semibold text-blue-700 dark:text-brand-cyan">Variables</span>
-            </div>
-
-            {varEntries.length > 0 ? (
-              /* Variable Table matching reference screenshot */
-              <div className="w-full border border-slate-200 dark:border-dark-750 rounded-lg overflow-hidden bg-white dark:bg-dark-900/90 shadow-inner">
-                <table className="w-full text-left font-mono text-xs">
-                  <tbody>
-                    {varEntries.map(([name, val]) => {
-                      const isChanged = changedVar === name;
-                      const formattedVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
-
-                      return (
-                        <tr 
-                          key={name}
-                          className={`border-b border-slate-100 dark:border-dark-800/80 last:border-b-0 transition-all duration-300 ${
-                            isChanged 
-                              ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-900 dark:text-emerald-300 font-bold' 
-                              : 'hover:bg-slate-50 dark:hover:bg-dark-850/60'
-                          }`}
-                        >
-                          {/* Variable Name */}
-                          <td className="px-3.5 py-2 font-semibold text-blue-700 dark:text-blue-300 border-r border-slate-100 dark:border-dark-800/80 w-1/2">
-                            <span className="flex items-center space-x-1.5">
-                              {isChanged && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />}
-                              <span>{name}</span>
-                            </span>
-                          </td>
-
-                          {/* Variable Value */}
-                          <td className={`px-3.5 py-2 font-medium ${isChanged ? 'text-emerald-800 dark:text-emerald-300 font-bold' : 'text-slate-800 dark:text-slate-200'}`}>
-                            {formattedVal}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center py-4 text-xs font-mono text-slate-400 dark:text-slate-500 italic">
-                No local variables in current scope.
-              </div>
-            )}
-          </div>
-
-          {/* Array / Collection Data Structure Visualizer */}
-          {dataStructures && dataStructures.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-slate-200 dark:border-dark-800">
-              {dataStructures.map((ds, dsIdx) => (
-                <div key={dsIdx} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-blue-700 dark:text-brand-cyan font-bold flex items-center space-x-1">
-                      <Box className="w-3 h-3" />
-                      <span>{ds.name} (Array [{ds.items ? ds.items.length : 0}])</span>
-                    </span>
-                  </div>
-
-                  {/* Array Blocks with Indices */}
-                  <div className="flex flex-wrap items-center gap-1.5 py-1">
-                    {ds.items && ds.items.map((item, idx) => {
-                      const isActive = ds.activeIndices && ds.activeIndices.includes(idx);
-                      return (
-                        <div key={idx} className="flex flex-col items-center">
-                          {/* Index Badge */}
-                          <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 mb-0.5">[{idx}]</span>
-                          
-                          {/* Box Value */}
-                          <div 
-                            className={`w-9 h-9 rounded-md border flex items-center justify-center font-mono text-xs font-bold transition-all duration-300 shadow-sm ${
-                              isActive
-                                ? 'bg-blue-100 dark:bg-brand-blue/30 border-blue-500 dark:border-brand-cyan text-blue-800 dark:text-brand-cyan scale-105 shadow-xs'
-                                : 'bg-white dark:bg-dark-900 border-slate-200 dark:border-dark-700 text-slate-800 dark:text-slate-200'
-                            }`}
-                          >
-                            {item}
-                          </div>
-
-                          {/* Pointer Label */}
-                          {ds.pointers && (
-                            <div className="mt-0.5 text-[9px] font-mono text-amber-600 dark:text-amber-400 font-bold">
-                              {Object.entries(ds.pointers)
-                                .filter(([k, v]) => v === idx)
-                                .map(([k]) => `▲ ${k}`)
-                                .join(' ')}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+    <div className="flex-1 flex flex-col p-3 bg-[var(--bg-surface)] overflow-y-auto select-none">
+      {/* Zoom Toolbar */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center space-x-1.5">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)] font-medium">
+            Memory & State
+          </span>
+          {callStack && callStack.length > 0 && (
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border border-[var(--border-color)] bg-[var(--bg-elevated)] text-[var(--text-muted)]">
+              Stack: {callStack[callStack.length - 1].frameName || 'main'}
+            </span>
           )}
+        </div>
+
+        <div className="flex items-center space-x-1">
+          <button
+            onClick={handleZoomOut}
+            className="p-1 rounded-[4px] border border-[var(--border-color)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+            title="Zoom out"
+          >
+            <ZoomOut className="w-3 h-3" />
+          </button>
+          <button
+            onClick={handleZoomReset}
+            className="px-1.5 py-0.5 rounded-[4px] border border-[var(--border-color)] bg-[var(--bg-elevated)] text-[10px] font-mono text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+            title="Reset zoom"
+          >
+            {zoomLevel}%
+          </button>
+          <button
+            onClick={handleZoomIn}
+            className="p-1 rounded-[4px] border border-[var(--border-color)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+            title="Zoom in"
+          >
+            <ZoomIn className="w-3 h-3" />
+          </button>
         </div>
       </div>
 
-      {/* Floating Zoom Controls */}
-      <div className="absolute bottom-3 right-3 flex items-center space-x-1 bg-white/95 dark:bg-dark-950/90 border border-slate-200 dark:border-dark-750 rounded-lg px-2 py-1 shadow-sm text-xs font-mono">
-        <button
-          onClick={handleZoomOut}
-          className="p-0.5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
-          title="Zoom Out"
-        >
-          <ZoomOut className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={handleZoomReset}
-          className="px-1.5 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-brand-cyan font-bold transition-colors cursor-pointer"
-          title="Reset Zoom (100%)"
-        >
-          {zoomLevel}%
-        </button>
-        <button
-          onClick={handleZoomIn}
-          className="p-0.5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
-          title="Zoom In"
-        >
-          <ZoomIn className="w-3.5 h-3.5" />
-        </button>
+      {/* Main Container with Zoom Transform */}
+      <div 
+        className="flex-1 space-y-3 transition-transform duration-150 origin-top"
+        style={{ transform: `scale(${zoomLevel / 100})` }}
+      >
+        {/* Call Stack Frame Container */}
+        {callStack && callStack.length > 1 && (
+          <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-elevated)] p-2.5">
+            <div className="flex items-center justify-between mb-1.5 text-[11px] font-mono text-[var(--text-muted)]">
+              <span className="flex items-center space-x-1">
+                <Layers className="w-3.5 h-3.5 text-[#5B6CFF]" />
+                <span>Call Stack ({callStack.length} frames)</span>
+              </span>
+            </div>
+            <div className="space-y-1">
+              {callStack.map((frame, idx) => (
+                <div 
+                  key={idx}
+                  className={`flex items-center justify-between px-2 py-1 rounded-[4px] text-xs font-mono border ${
+                    idx === callStack.length - 1
+                      ? 'border-[#5B6CFF]/40 bg-[#5B6CFF]/10 text-[var(--text-main)] font-medium'
+                      : 'border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-muted)]'
+                  }`}
+                >
+                  <span>{frame.frameName}</span>
+                  <span className="text-[10px] opacity-75">line {frame.line}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Clean Bordered Table for Variables (Zebra-free rows) */}
+        <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-elevated)] overflow-hidden">
+          <div className="px-3 py-1.5 border-b border-[var(--border-color)] bg-[var(--bg-surface)] flex items-center justify-between">
+            <span className="text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)] font-medium">
+              Variables in Scope
+            </span>
+            <span className="text-[11px] font-mono text-[var(--text-muted)]">
+              {varEntries.length} {varEntries.length === 1 ? 'var' : 'vars'}
+            </span>
+          </div>
+
+          {varEntries.length > 0 ? (
+            <table className="w-full text-left font-mono text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-[var(--border-color)] text-[10px] text-[var(--text-muted)] uppercase tracking-wider bg-[var(--bg-surface)]/40">
+                  <th className="px-3 py-1.5 font-medium w-1/3">Name</th>
+                  <th className="px-3 py-1.5 font-medium w-1/2">Value</th>
+                  <th className="px-3 py-1.5 font-medium text-right">Type</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border-color)]">
+                {varEntries.map(([name, val]) => {
+                  const isChanged = changedVar === name;
+                  const formattedVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
+                  const typeLabel = inferType(val);
+
+                  return (
+                    <tr 
+                      key={name}
+                      className={`transition-colors ${
+                        isChanged 
+                          ? 'bg-[#5B6CFF]/10 text-[var(--text-main)]' 
+                          : 'bg-transparent text-[var(--text-main)] hover:bg-[var(--accent-subtle)]'
+                      }`}
+                    >
+                      {/* Name Column */}
+                      <td className="px-3 py-2 font-medium">
+                        <div className="flex items-center space-x-1.5">
+                          {isChanged && <span className="w-1.5 h-1.5 rounded-full bg-[#5B6CFF]" />}
+                          <span className={isChanged ? 'text-[#5B6CFF] font-semibold' : ''}>{name}</span>
+                        </div>
+                      </td>
+
+                      {/* Value Column */}
+                      <td className="px-3 py-2 font-mono break-all">
+                        <span className={isChanged ? 'font-semibold' : ''}>
+                          {formattedVal}
+                        </span>
+                      </td>
+
+                      {/* Type Column */}
+                      <td className="px-3 py-2 text-right text-[11px] text-[var(--text-muted)]">
+                        {typeLabel}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <div className="text-center py-6 text-xs font-mono text-[var(--text-muted)] italic">
+              No local variables in current scope.
+            </div>
+          )}
+        </div>
+
+        {/* Arrays & Structures Visualizer */}
+        {dataStructures && dataStructures.length > 0 && (
+          <div className="space-y-2">
+            {dataStructures.map((ds, dsIdx) => (
+              <div key={dsIdx} className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-elevated)] p-2.5 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-[var(--text-main)] font-medium flex items-center space-x-1">
+                    <Box className="w-3.5 h-3.5 text-[#5B6CFF]" />
+                    <span>{ds.name}</span>
+                  </span>
+                  <span className="text-[10px] text-[var(--text-muted)]">
+                    length: {ds.items ? ds.items.length : 0}
+                  </span>
+                </div>
+
+                {ds.items && ds.items.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1 font-mono text-xs">
+                    {ds.items.map((item, itemIdx) => (
+                      <div 
+                        key={itemIdx}
+                        className="flex flex-col items-center border border-[var(--border-color)] rounded-[4px] bg-[var(--bg-surface)] px-2 py-1 min-w-[32px]"
+                      >
+                        <span className="text-[9px] text-[var(--text-muted)]">[{itemIdx}]</span>
+                        <span className="font-semibold text-[var(--text-main)]">{String(item)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

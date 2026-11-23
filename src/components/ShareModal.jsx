@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Share2, Copy, Check, Link, Globe, Download, Sparkles } from 'lucide-react';
+import { X, Share2, Copy, Check, Link, Download } from 'lucide-react';
 import { createShareLink } from '../services/api';
 
 export default function ShareModal({
@@ -56,98 +56,87 @@ export default function ShareModal({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `codelens-${language}-explanation.json`;
+    a.download = `codelens-${language}-trace.json`;
     a.click();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 dark:bg-black/70 backdrop-blur-sm animate-fadeIn select-none">
-      <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-750 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden transition-colors">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 dark:bg-dark-850 border-b border-slate-200 dark:border-dark-750">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-xl bg-emerald-100 dark:bg-brand-emerald/20 text-emerald-600 dark:text-brand-emerald shadow-sm">
-              <Share2 className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                Share Code & Visual State
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Generate a shareable link or export interactive session
-              </p>
-            </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-[4px] animate-fadeIn select-none">
+      <div className="bg-[var(--bg-elevated)] border border-[var(--border-color)] rounded-[12px] w-full max-w-lg shadow-modal overflow-hidden transition-colors">
+        {/* Sticky Header */}
+        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-3.5 bg-[var(--bg-surface)] border-b border-[var(--border-color)]">
+          <div className="flex items-center space-x-2">
+            <Share2 className="w-4 h-4 text-[#5B6CFF]" />
+            <h2 className="text-sm font-semibold text-[var(--text-main)]">
+              Share Session
+            </h2>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-dark-750 transition-colors cursor-pointer"
+            className="p-1.5 rounded-[6px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--accent-subtle)] cursor-pointer"
+            title="Close"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-4 font-sans select-text">
+        <div className="p-5 space-y-4 font-sans text-xs">
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            Generate an immutable public link to share this code, compiler outputs, and synchronized execution trace.
+          </p>
+
           {!shareUrl ? (
-            <div className="text-center py-6 space-y-4">
-              <div className="p-4 rounded-full bg-slate-100 dark:bg-dark-850 border border-slate-200 dark:border-dark-700 w-16 h-16 mx-auto flex items-center justify-center text-blue-600 dark:text-brand-cyan">
-                <Globe className="w-8 h-8" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  Ready to generate a unique share link
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs mx-auto">
-                  Anyone with this link can view the animated step visualizer, memory state diagram, and AI explanation.
-                </p>
-              </div>
-
-              <button
-                onClick={handleGenerateLink}
-                disabled={isGenerating}
-                className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-all cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4 text-yellow-300" />
-                <span>{isGenerating ? 'Generating Link...' : 'Create Shareable Link'}</span>
-              </button>
-            </div>
+            <button
+              onClick={handleGenerateLink}
+              disabled={isGenerating}
+              className="w-full py-2 px-3 bg-[#5B6CFF] hover:bg-[#4858EC] text-white rounded-[6px] font-medium text-xs flex items-center justify-center space-x-1.5 cursor-pointer active:scale-95 shadow-xs"
+            >
+              <Link className="w-3.5 h-3.5" />
+              <span>{isGenerating ? 'Generating Public Link...' : 'Create Shareable Link'}</span>
+            </button>
           ) : (
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center space-x-1.5">
-                  <Link className="w-3.5 h-3.5 text-blue-600 dark:text-brand-cyan" />
-                  <span>Shareable Web Link</span>
-                </label>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={shareUrl}
-                    className="flex-1 bg-slate-50 dark:bg-dark-950 border border-slate-200 dark:border-dark-750 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-none select-all"
-                  />
-                  <button
-                    onClick={handleCopy}
-                    className="flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-all cursor-pointer"
-                  >
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    <span>{copied ? 'Copied' : 'Copy'}</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-slate-200 dark:border-dark-800 flex items-center justify-between">
-                <span className="text-xs text-slate-500 dark:text-slate-400">Offline JSON Export:</span>
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={shareUrl}
+                  className="flex-1 bg-[var(--bg-app)] border border-[var(--border-color)] rounded-[6px] px-2.5 py-1.5 font-mono text-xs text-[var(--text-main)] focus:outline-none"
+                />
                 <button
-                  onClick={handleExportJSON}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-dark-850 hover:bg-slate-200 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-dark-700 transition-colors cursor-pointer"
+                  onClick={handleCopy}
+                  className="px-3 py-1.5 bg-[#5B6CFF] hover:bg-[#4858EC] text-white font-medium rounded-[6px] text-xs flex items-center space-x-1 cursor-pointer active:scale-95"
                 >
-                  <Download className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                  <span>Export JSON</span>
+                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copied ? 'Copied' : 'Copy'}</span>
                 </button>
               </div>
             </div>
           )}
+
+          {/* Export JSON option */}
+          <div className="pt-2 border-t border-[var(--border-color)] flex items-center justify-between">
+            <span className="text-[11px] text-[var(--text-muted)]">Export raw execution data:</span>
+            <button
+              onClick={handleExportJSON}
+              className="flex items-center space-x-1.5 px-2.5 py-1 rounded-[6px] border border-[var(--border-color)] bg-[var(--bg-surface)] hover:bg-[var(--accent-subtle)] text-[var(--text-main)] text-xs font-medium cursor-pointer"
+            >
+              <Download className="w-3 h-3 text-[var(--text-muted)]" />
+              <span>Export JSON</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 bg-[var(--bg-surface)] border-t border-[var(--border-color)] flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-3.5 py-1.5 rounded-[6px] text-xs font-medium border border-[var(--border-color)] bg-[var(--bg-elevated)] text-[var(--text-main)] hover:bg-[var(--accent-subtle)] cursor-pointer"
+          >
+            Done
+          </button>
         </div>
       </div>
     </div>

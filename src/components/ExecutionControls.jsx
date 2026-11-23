@@ -1,121 +1,147 @@
-﻿import React from 'react';
+import React from 'react';
 import { 
   SkipBack, 
   Play, 
   Pause, 
   SkipForward, 
-  RotateCcw, 
-  Share2, 
-  Gauge 
+  RotateCcw,
+  Gauge
 } from 'lucide-react';
 
 export default function ExecutionControls({
-  currentStep,
-  totalSteps,
-  isPlaying,
+  currentStep = 1,
+  totalSteps = 1,
+  isPlaying = false,
   onTogglePlay,
   onStepForward,
   onStepBackward,
   onRewind,
   onFastForward,
   onSeekStep,
-  playbackSpeed,
+  playbackSpeed = 1,
   onChangeSpeed,
-  onOpenShare
+  activeTab = 'visualizer',
+  setActiveTab
 }) {
+  const tabs = [
+    { id: 'visualizer', label: 'Visualizer' },
+    { id: 'variables', label: 'Variables' },
+    { id: 'output', label: 'Output' }
+  ];
+
+  const speeds = [0.5, 1, 2];
+
+  const handleCycleSpeed = () => {
+    const currentIndex = speeds.indexOf(playbackSpeed);
+    const nextIndex = (currentIndex + 1) % speeds.length;
+    onChangeSpeed(speeds[nextIndex]);
+  };
+
   return (
-    <div className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-dark-850 border-b border-slate-200 dark:border-dark-750 select-none transition-colors">
-      {/* Title */}
-      <div className="flex items-center space-x-2">
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-          Output & Visualizer
-        </span>
+    <div className="h-9 px-3 bg-[var(--bg-surface)] border-b border-[var(--border-color)] flex items-center justify-between select-none">
+      {/* Tab-style Panel Header ('Visualizer', 'Variables', 'Output') */}
+      <div className="flex items-center space-x-1">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab && setActiveTab(tab.id)}
+              className={`px-2.5 py-1 text-xs rounded-[6px] transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-[var(--bg-elevated)] text-[var(--text-main)] font-medium shadow-subtle border border-[var(--border-color)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--accent-subtle)] border border-transparent'
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Stepper Controls */}
+      {/* Compact Icon-Only Step Controls & Slider */}
       <div className="flex items-center space-x-2">
-        {/* Rewind / Step Back Button */}
-        <button
-          onClick={onStepBackward}
-          disabled={currentStep <= 1}
-          className={`p-1.5 rounded-md border transition-all cursor-pointer ${
-            currentStep > 1
-              ? 'bg-white dark:bg-dark-950 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-dark-700 hover:bg-slate-100 dark:hover:bg-dark-750 hover:text-slate-900 dark:hover:text-white shadow-xs'
-              : 'bg-slate-100 dark:bg-dark-950/50 text-slate-400 dark:text-slate-600 border-slate-200 dark:border-dark-800 cursor-not-allowed'
-          }`}
-          title="Step Backward"
-        >
-          <SkipBack className="w-3.5 h-3.5" />
-        </button>
+        {/* Segmented Stepper Buttons */}
+        <div className="flex items-center rounded-[6px] border border-[var(--border-color)] bg-[var(--bg-elevated)] p-0.5 shadow-subtle">
+          {/* Rewind */}
+          <button
+            onClick={onRewind}
+            disabled={currentStep <= 1}
+            className={`p-1 rounded-[4px] cursor-pointer ${
+              currentStep > 1 
+                ? 'text-[var(--text-main)] hover:bg-[var(--accent-subtle)]' 
+                : 'text-[var(--text-muted)] opacity-40 cursor-not-allowed'
+            }`}
+            title="Rewind to start"
+          >
+            <RotateCcw className="w-3 h-3" />
+          </button>
 
-        {/* Play / Pause Toggle Button */}
-        <button
-          onClick={onTogglePlay}
-          className={`p-1.5 rounded-md border transition-all cursor-pointer ${
-            isPlaying
-              ? 'bg-amber-50 dark:bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-300 dark:border-amber-500/50 hover:bg-amber-100 dark:hover:bg-amber-500/30'
-              : 'bg-blue-50 dark:bg-brand-blue/20 text-blue-600 dark:text-brand-cyan border-blue-200 dark:border-brand-cyan/40 hover:bg-blue-100 dark:hover:bg-brand-blue/30'
-          }`}
-          title={isPlaying ? 'Pause Animation' : 'Auto Play Execution'}
-        >
-          {isPlaying ? (
-            <Pause className="w-3.5 h-3.5 fill-current" />
-          ) : (
-            <Play className="w-3.5 h-3.5 fill-current" />
-          )}
-        </button>
+          {/* Step Backward */}
+          <button
+            onClick={onStepBackward}
+            disabled={currentStep <= 1}
+            className={`p-1 rounded-[4px] cursor-pointer ${
+              currentStep > 1 
+                ? 'text-[var(--text-main)] hover:bg-[var(--accent-subtle)]' 
+                : 'text-[var(--text-muted)] opacity-40 cursor-not-allowed'
+            }`}
+            title="Step backward (Left Arrow)"
+          >
+            <SkipBack className="w-3 h-3" />
+          </button>
 
-        {/* Step Scrubber & "Step X of Y" Badge */}
-        <div className="flex items-center space-x-2 bg-white dark:bg-dark-950 border border-slate-200 dark:border-dark-750 px-2.5 py-1 rounded-lg shadow-xs">
+          {/* Play / Pause Toggle */}
+          <button
+            onClick={onTogglePlay}
+            className="p-1 rounded-[4px] text-[#5B6CFF] hover:bg-[#5B6CFF]/10 cursor-pointer"
+            title={isPlaying ? 'Pause' : 'Auto Play'}
+          >
+            {isPlaying ? (
+              <Pause className="w-3 h-3 fill-current" />
+            ) : (
+              <Play className="w-3 h-3 fill-current" />
+            )}
+          </button>
+
+          {/* Step Forward */}
+          <button
+            onClick={onStepForward}
+            disabled={currentStep >= totalSteps}
+            className={`p-1 rounded-[4px] cursor-pointer ${
+              currentStep < totalSteps 
+                ? 'text-[var(--text-main)] hover:bg-[var(--accent-subtle)]' 
+                : 'text-[var(--text-muted)] opacity-40 cursor-not-allowed'
+            }`}
+            title="Step forward (Right Arrow)"
+          >
+            <SkipForward className="w-3 h-3" />
+          </button>
+        </div>
+
+        {/* Minimal Compact Slider + Step Counter */}
+        <div className="hidden sm:flex items-center space-x-2 pl-1 font-mono text-[11px] text-[var(--text-muted)]">
           <input
             type="range"
             min="1"
             max={totalSteps || 1}
             value={currentStep}
             onChange={(e) => onSeekStep(parseInt(e.target.value, 10))}
-            className="w-20 sm:w-28 h-1.5 bg-slate-200 dark:bg-dark-800 rounded-lg appearance-none cursor-pointer accent-blue-600 dark:accent-brand-cyan"
+            className="w-16 md:w-24 h-1 bg-[var(--border-color)] rounded-lg appearance-none cursor-pointer accent-[#5B6CFF]"
+            title={`Step ${currentStep} of ${totalSteps}`}
           />
-          <span className="text-xs font-mono font-semibold text-blue-700 dark:text-brand-cyan whitespace-nowrap min-w-[75px] text-center">
-            Step {currentStep} of {totalSteps}
+          <span className="min-w-[48px] text-right font-medium text-[var(--text-main)]">
+            {currentStep}/{totalSteps}
           </span>
         </div>
 
-        {/* Step Forward / Fast Forward Button */}
+        {/* Speed Cycle Button */}
         <button
-          onClick={onStepForward}
-          disabled={currentStep >= totalSteps}
-          className={`p-1.5 rounded-md border transition-all cursor-pointer ${
-            currentStep < totalSteps
-              ? 'bg-blue-600 dark:bg-brand-blue text-white border-blue-500 dark:border-blue-400/40 hover:bg-blue-700 dark:hover:bg-blue-500 active:scale-95 shadow-sm'
-              : 'bg-slate-100 dark:bg-dark-950/50 text-slate-400 dark:text-slate-600 border-slate-200 dark:border-dark-800 cursor-not-allowed'
-          }`}
-          title="Step Forward"
+          onClick={handleCycleSpeed}
+          className="px-1.5 py-0.5 rounded-[4px] border border-[var(--border-color)] bg-[var(--bg-elevated)] text-[11px] font-mono font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer shadow-subtle"
+          title="Cycle playback speed"
         >
-          <SkipForward className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Playback Speed Selector */}
-        <div className="hidden sm:flex items-center bg-white dark:bg-dark-950 border border-slate-200 dark:border-dark-750 rounded-lg px-2 py-0.5 text-xs shadow-xs">
-          <Gauge className="w-3 h-3 text-slate-500 mr-1" />
-          <select
-            value={playbackSpeed}
-            onChange={(e) => onChangeSpeed(parseFloat(e.target.value))}
-            className="bg-transparent text-[11px] font-mono text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
-          >
-            <option value="0.5" className="bg-white dark:bg-dark-900 text-slate-800 dark:text-slate-200">0.5x</option>
-            <option value="1" className="bg-white dark:bg-dark-900 text-slate-800 dark:text-slate-200">1.0x</option>
-            <option value="2" className="bg-white dark:bg-dark-900 text-slate-800 dark:text-slate-200">2.0x</option>
-            <option value="4" className="bg-white dark:bg-dark-900 text-slate-800 dark:text-slate-200">4.0x</option>
-          </select>
-        </div>
-
-        {/* Share Icon */}
-        <button
-          onClick={onOpenShare}
-          className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-dark-750 transition-colors cursor-pointer"
-          title="Share this visual state"
-        >
-          <Share2 className="w-4 h-4" />
+          {playbackSpeed}x
         </button>
       </div>
     </div>

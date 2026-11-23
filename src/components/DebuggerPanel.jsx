@@ -1,24 +1,22 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { 
   X, 
   Bug, 
   CheckCircle2, 
   AlertTriangle, 
   AlertCircle, 
-  Wrench, 
-  Sparkles, 
   Check, 
-  Code,
-  ShieldCheck,
-  ChevronRight,
+  ShieldCheck, 
   Split,
-  FileCode
+  FileCode,
+  Wrench
 } from 'lucide-react';
 
 export default function DebuggerPanel({
   isOpen,
   onClose,
   debugData,
+  isLoading = false,
   onApplyFix,
   currentCode
 }) {
@@ -34,9 +32,9 @@ export default function DebuggerPanel({
 
   const filteredIssues = issues.filter(issue => {
     if (selectedFilter === 'all') return true;
-    if (selectedFilter === 'errors') return issue.severity?.includes('Error') || issue.type?.includes('Error');
-    if (selectedFilter === 'warnings') return issue.severity?.includes('Warning') || issue.type?.includes('Warning');
-    if (selectedFilter === 'logic') return issue.severity?.includes('Logic') || issue.type?.includes('Logic') || issue.type?.includes('Loop');
+    if (selectedFilter === 'errors') return issue.severity?.toLowerCase().includes('error') || issue.type?.toLowerCase().includes('error');
+    if (selectedFilter === 'warnings') return issue.severity?.toLowerCase().includes('warning') || issue.type?.toLowerCase().includes('warning');
+    if (selectedFilter === 'logic') return issue.severity?.toLowerCase().includes('logic') || issue.type?.toLowerCase().includes('logic');
     return true;
   });
 
@@ -47,167 +45,133 @@ export default function DebuggerPanel({
       setTimeout(() => {
         setApplied(false);
         onClose();
-      }, 1200);
+      }, 1000);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 dark:bg-black/70 backdrop-blur-sm animate-fadeIn select-none">
-      <div className="bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-750 rounded-2xl w-full max-w-4xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden transition-colors">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 dark:bg-dark-850 border-b border-slate-200 dark:border-dark-750">
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-xl ${hasIssues ? 'bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400' : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'} shadow-sm`}>
-              <Bug className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  AI Error Detector & 1-Click Debugger
-                </h2>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                  hasIssues 
-                    ? 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-500/40' 
-                    : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/40'
-                }`}>
-                  {hasIssues ? `${issues.length} Issues Found` : 'Clean & Verified'}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                AST compiler syntax validator, memory safety auditor, and automatic patch generator
-              </p>
-            </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-[4px] animate-fadeIn select-none">
+      <div className="bg-[var(--bg-elevated)] border border-[var(--border-color)] rounded-[12px] w-full max-w-4xl max-h-[85vh] flex flex-col shadow-modal overflow-hidden transition-colors">
+        {/* Sticky Header */}
+        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-3.5 bg-[var(--bg-surface)] border-b border-[var(--border-color)]">
+          <div className="flex items-center space-x-2.5">
+            <h2 className="text-sm font-semibold text-[var(--text-main)] flex items-center space-x-2">
+              <Bug className="w-4 h-4 text-[#5B6CFF]" />
+              <span>Compiler Diagnostics & Debugger</span>
+            </h2>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium border ${
+              hasIssues 
+                ? 'text-[var(--status-error)] bg-[var(--status-error-bg)] border-[var(--status-error-border)]' 
+                : 'text-[var(--status-success)] bg-[var(--status-success-bg)] border-[var(--status-success-border)]'
+            }`}>
+              {hasIssues ? `${issues.length} Issues Detected` : 'All Checks Passed'}
+            </span>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-dark-750 transition-colors cursor-pointer"
+            className="p-1.5 rounded-[6px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--accent-subtle)] cursor-pointer"
+            title="Close (Esc)"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-5 space-y-4 select-text font-sans text-xs">
           {!hasIssues ? (
             /* Clean State */
-            <div className="p-10 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 flex flex-col items-center justify-center text-center space-y-3">
-              <div className="p-3 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-                <ShieldCheck className="w-10 h-10" />
+            <div className="p-8 rounded-[8px] bg-[var(--bg-surface)] border border-[var(--border-color)] flex flex-col items-center justify-center text-center space-y-2.5">
+              <div className="w-9 h-9 rounded-full bg-[var(--status-success-bg)] border border-[var(--status-success-border)] flex items-center justify-center text-[var(--status-success)]">
+                <ShieldCheck className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-emerald-900 dark:text-emerald-200">
-                No Syntax, Compiler, or Logic Errors Detected
+              <h3 className="text-sm font-semibold text-[var(--text-main)]">
+                No Syntax or Compilation Errors Found
               </h3>
-              <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md">
-                Your code passed all static syntax compilation, memory safety, loop bound invariants, and type correctness checks.
+              <p className="text-xs text-[var(--text-muted)] max-w-md leading-relaxed">
+                Source code passed real compiler syntax checks, AST structure verification, and loop invariant validation.
               </p>
             </div>
           ) : (
             <>
-              {/* Filter Tabs */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1.5 bg-slate-100 dark:bg-dark-850 p-1 rounded-xl border border-slate-200 dark:border-dark-750 text-xs font-medium">
+              {/* Filter Tabs & Diff Toggle */}
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center rounded-[6px] border border-[var(--border-color)] bg-[var(--bg-app)] p-0.5">
                   <button
                     onClick={() => setSelectedFilter('all')}
-                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    className={`px-2.5 py-0.5 text-xs rounded-[4px] cursor-pointer ${
                       selectedFilter === 'all'
-                        ? 'bg-white dark:bg-dark-700 text-slate-900 dark:text-white shadow-xs font-bold'
-                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
+                        ? 'bg-[var(--bg-elevated)] text-[var(--text-main)] font-medium shadow-subtle border border-[var(--border-color)]'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
                     }`}
                   >
                     All ({issues.length})
                   </button>
                   <button
                     onClick={() => setSelectedFilter('errors')}
-                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    className={`px-2.5 py-0.5 text-xs rounded-[4px] cursor-pointer ${
                       selectedFilter === 'errors'
-                        ? 'bg-red-500 text-white font-bold'
-                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
+                        ? 'bg-[var(--bg-elevated)] text-[var(--text-main)] font-medium shadow-subtle border border-[var(--border-color)]'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
                     }`}
                   >
                     Errors
                   </button>
                   <button
                     onClick={() => setSelectedFilter('warnings')}
-                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    className={`px-2.5 py-0.5 text-xs rounded-[4px] cursor-pointer ${
                       selectedFilter === 'warnings'
-                        ? 'bg-amber-500 text-white font-bold'
-                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
+                        ? 'bg-[var(--bg-elevated)] text-[var(--text-main)] font-medium shadow-subtle border border-[var(--border-color)]'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
                     }`}
                   >
                     Warnings
                   </button>
-                  <button
-                    onClick={() => setSelectedFilter('logic')}
-                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                      selectedFilter === 'logic'
-                        ? 'bg-purple-600 text-white font-bold'
-                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
-                    }`}
-                  >
-                    Logic Bugs
-                  </button>
                 </div>
 
-                {/* Diff View Toggle */}
                 <button
                   onClick={() => setViewDiff(!viewDiff)}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-dark-850 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-dark-700 hover:bg-slate-200 dark:hover:bg-dark-750 transition-colors cursor-pointer"
+                  className="flex items-center space-x-1.5 px-2.5 py-1 rounded-[6px] text-xs font-medium border border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
                 >
-                  <Split className="w-3.5 h-3.5 text-blue-500" />
-                  <span>{viewDiff ? 'Hide Code Diff' : 'Show Code Diff'}</span>
+                  <Split className="w-3.5 h-3.5" />
+                  <span>{viewDiff ? 'Hide Patch Diff' : 'Show Patch Diff'}</span>
                 </button>
               </div>
 
-              {/* Issue Cards */}
-              <div className="space-y-3">
+              {/* Issue List */}
+              <div className="space-y-2.5">
                 {filteredIssues.map((issue, idx) => {
-                  const isErr = issue.severity?.includes('Error') || issue.type?.includes('Error');
-                  const isLogic = issue.severity?.includes('Logic') || issue.type?.includes('Logic') || issue.type?.includes('Loop');
+                  const isErr = issue.severity?.toLowerCase().includes('error') || issue.type?.toLowerCase().includes('error');
                   
                   return (
                     <div 
                       key={idx}
-                      className={`p-4 rounded-xl border transition-all ${
-                        isErr
-                          ? 'bg-red-50/70 dark:bg-red-950/20 border-red-200 dark:border-red-500/30'
-                          : isLogic
-                          ? 'bg-purple-50/70 dark:bg-purple-950/20 border-purple-200 dark:border-purple-500/30'
-                          : 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-500/30'
-                      }`}
+                      className="p-3 rounded-[8px] border border-[var(--border-color)] bg-[var(--bg-surface)] space-y-1.5"
                     >
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
-                          <span className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono ${
-                            isErr
-                              ? 'bg-red-500 text-white'
-                              : isLogic
-                              ? 'bg-purple-600 text-white'
-                              : 'bg-amber-500 text-white'
-                          }`}>
+                          <span className="font-mono text-[11px] font-semibold text-[var(--text-muted)] bg-[var(--bg-app)] px-1.5 py-0.2 rounded border border-[var(--border-color)]">
                             Line {issue.line}
                           </span>
-                          <span className="font-semibold text-xs text-slate-900 dark:text-slate-100">
-                            {issue.type || 'Syntax/Logic Issue'}
+                          <span className="font-semibold text-xs text-[var(--text-main)]">
+                            {issue.type || 'Compiler Diagnostic'}
                           </span>
                         </div>
-                        <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                          isErr ? 'text-red-600 dark:text-red-400' : isLogic ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600 dark:text-amber-400'
+                        <span className={`text-[10px] font-mono uppercase tracking-wider font-medium ${
+                          isErr ? 'text-[var(--status-error)]' : 'text-[var(--status-warning)]'
                         }`}>
                           {issue.severity || 'Error'}
                         </span>
                       </div>
 
-                      <p className="text-xs text-slate-700 dark:text-slate-300 mt-2 font-mono">
+                      <p className="text-xs text-[var(--text-main)] font-mono leading-relaxed opacity-90">
                         {issue.message}
                       </p>
 
                       {issue.suggestion && (
-                        <div className="mt-2.5 p-2 rounded-lg bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-750 flex items-start space-x-2 text-xs">
-                          <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-brand-cyan flex-shrink-0 mt-0.5" />
-                          <span className="text-slate-700 dark:text-slate-300">
-                            <strong className="text-slate-900 dark:text-white">AI Fix:</strong> {issue.suggestion}
-                          </span>
+                        <div className="text-[11px] text-[var(--text-muted)] pt-1 flex items-start space-x-1.5">
+                          <span className="text-[#5B6CFF] font-medium select-none">Fix:</span>
+                          <span>{issue.suggestion}</span>
                         </div>
                       )}
                     </div>
@@ -215,35 +179,31 @@ export default function DebuggerPanel({
                 })}
               </div>
 
-              {/* Side-by-Side Visual Diff Preview */}
-              {viewDiff && fixedCode && (
-                <div className="space-y-2 pt-2">
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    <span className="flex items-center space-x-1.5">
-                      <FileCode className="w-4 h-4 text-blue-600 dark:text-brand-cyan" />
-                      <span>1-Click Patch Preview (Before vs AI Fixed)</span>
-                    </span>
-                  </div>
+              {/* Code Diff Preview */}
+              {viewDiff && fixedCode && fixedCode !== currentCode && (
+                <div className="space-y-2 pt-2 border-t border-[var(--border-color)]">
+                  <span className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-medium flex items-center space-x-1.5">
+                    <FileCode className="w-3.5 h-3.5" />
+                    <span>Patch Preview (Current vs Repaired)</span>
+                  </span>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* Before */}
-                    <div className="rounded-xl border border-red-200 dark:border-red-500/30 overflow-hidden bg-red-50/30 dark:bg-dark-950 flex flex-col">
-                      <div className="px-3 py-1.5 bg-red-100/60 dark:bg-red-950/40 text-red-700 dark:text-red-400 text-[11px] font-mono font-bold border-b border-red-200 dark:border-red-500/30 flex items-center justify-between">
-                        <span>Original Code</span>
-                        <span className="text-[10px]">Errors Present</span>
+                    <div className="rounded-[8px] border border-[var(--status-error-border)] bg-[var(--bg-app)] overflow-hidden flex flex-col">
+                      <div className="px-3 py-1 bg-[var(--status-error-bg)] text-[var(--status-error)] text-[11px] font-mono font-medium border-b border-[var(--status-error-border)]">
+                        Original Code
                       </div>
-                      <pre className="p-3 font-mono text-xs text-slate-800 dark:text-slate-200 overflow-x-auto whitespace-pre leading-5">
+                      <pre className="p-3 font-mono text-xs text-[var(--text-main)] overflow-x-auto whitespace-pre leading-5 opacity-80">
                         {currentCode}
                       </pre>
                     </div>
 
                     {/* After */}
-                    <div className="rounded-xl border border-emerald-200 dark:border-emerald-500/30 overflow-hidden bg-emerald-50/30 dark:bg-dark-950 flex flex-col">
-                      <div className="px-3 py-1.5 bg-emerald-100/60 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-[11px] font-mono font-bold border-b border-emerald-200 dark:border-emerald-500/30 flex items-center justify-between">
-                        <span>CodeLens AI Repaired Code</span>
-                        <span className="text-[10px]">Verified Safe</span>
+                    <div className="rounded-[8px] border border-[var(--status-success-border)] bg-[var(--bg-app)] overflow-hidden flex flex-col">
+                      <div className="px-3 py-1 bg-[var(--status-success-bg)] text-[var(--status-success)] text-[11px] font-mono font-medium border-b border-[var(--status-success-border)]">
+                        Repaired Code
                       </div>
-                      <pre className="p-3 font-mono text-xs text-emerald-900 dark:text-emerald-300 overflow-x-auto whitespace-pre leading-5">
+                      <pre className="p-3 font-mono text-xs text-[var(--text-main)] overflow-x-auto whitespace-pre leading-5">
                         {fixedCode}
                       </pre>
                     </div>
@@ -254,44 +214,40 @@ export default function DebuggerPanel({
           )}
         </div>
 
-        {/* Footer with 1-Click Fix Button */}
-        {hasIssues && (
-          <div className="px-6 py-4 bg-slate-50 dark:bg-dark-850 border-t border-slate-200 dark:border-dark-750 flex items-center justify-between">
-            <div className="text-xs text-slate-500 font-sans hidden sm:inline">
-              Clicking apply will rewrite the editor with the verified AI patch.
-            </div>
+        {/* Footer */}
+        <div className="px-5 py-3 bg-[var(--bg-surface)] border-t border-[var(--border-color)] flex items-center justify-between">
+          <span className="text-[11px] text-[var(--text-muted)] font-mono">
+            {issues.length} {issues.length === 1 ? 'issue found' : 'issues found'}
+          </span>
 
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-dark-750 transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 rounded-[6px] text-xs font-medium border border-[var(--border-color)] bg-[var(--bg-elevated)] text-[var(--text-main)] hover:bg-[var(--accent-subtle)] cursor-pointer"
+            >
+              Close
+            </button>
+            {hasIssues && fixedCode && fixedCode !== currentCode && (
               <button
                 onClick={handleApply}
-                className={`flex items-center space-x-2 px-5 py-2 rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer ${
-                  applied
-                    ? 'bg-emerald-600 text-white scale-105'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
+                disabled={applied}
+                className="px-3.5 py-1.5 rounded-[6px] text-xs font-medium bg-[#5B6CFF] hover:bg-[#4858EC] text-white shadow-xs cursor-pointer flex items-center space-x-1.5 active:scale-95"
               >
                 {applied ? (
                   <>
-                    <Check className="w-4 h-4 text-white" />
-                    <span>Applied Fix Successfully!</span>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Applied!</span>
                   </>
                 ) : (
                   <>
-                    <Wrench className="w-4 h-4 text-white" />
-                    <span>Apply 1-Click AI Fix</span>
+                    <Wrench className="w-3.5 h-3.5" />
+                    <span>Apply 1-Click Fix</span>
                   </>
                 )}
               </button>
-            </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

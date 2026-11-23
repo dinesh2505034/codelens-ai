@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { 
   Code2, 
   Sparkles, 
@@ -8,20 +8,29 @@ import {
   Settings, 
   Sun, 
   Moon, 
-  Scan 
+  Play,
+  Square,
+  ChevronDown,
+  Layers
 } from 'lucide-react';
 
 export default function Navbar({
-  language,
+  language = 'python',
   setLanguage,
+  activePreset = '',
+  onSelectPreset,
+  presets = [],
   onOpenOCR,
   onOpenExplain,
   onOpenDebugger,
   onOpenShare,
   onOpenSettings,
-  hasErrors,
-  issueCount,
-  theme,
+  hasErrors = false,
+  issueCount = 0,
+  onRunCode,
+  onResetCode,
+  isRunning = false,
+  theme = 'dark',
   onToggleTheme
 }) {
   const languages = [
@@ -32,123 +41,161 @@ export default function Navbar({
   ];
 
   return (
-    <header className="bg-white dark:bg-dark-900 border-b border-slate-200 dark:border-dark-750 px-4 py-2.5 flex items-center justify-between shadow-xs select-none sticky top-0 z-30 transition-colors">
-      {/* Brand Logo */}
+    <header className="h-12 w-full bg-[var(--bg-surface)] border-b border-[var(--border-color)] px-3 flex items-center justify-between select-none sticky top-0 z-30 transition-colors">
+      {/* Left: Brand Logo + Language Selector */}
       <div className="flex items-center space-x-3">
-        <div className="flex items-center space-x-2 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-cyan-500/10 dark:from-cyan-500/15 dark:via-blue-500/15 dark:to-indigo-500/15 border border-blue-200 dark:border-cyan-500/30 px-3 py-1.5 rounded-xl shadow-xs">
-          <div className="relative flex items-center justify-center">
-            {/* Crystal Lens Icon Graphic */}
-            <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 p-0.5 flex items-center justify-center shadow-xs">
-              <div className="w-full h-full bg-white dark:bg-dark-950 rounded-[6px] flex items-center justify-center relative overflow-hidden">
-                <Scan className="w-3.5 h-3.5 text-blue-600 dark:text-cyan-400" />
-                <span className="absolute inset-0 bg-blue-500/10 animate-pulse"></span>
-              </div>
-            </div>
-            {/* Pulsing Active Neural Glow */}
-            <span className="absolute -top-1 -right-1 flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+        {/* Brand Logo - Minimal, Calm, Engineering-Grade */}
+        <div className="flex items-center space-x-2 text-[var(--text-main)]">
+          <div className="w-6 h-6 rounded-[6px] bg-[#5B6CFF] flex items-center justify-center text-white shadow-xs">
+            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21L16.5 16.5" strokeLinecap="round" />
+              <path d="M9 11L11 13L14 9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div className="flex items-center">
+            <span className="font-semibold text-sm tracking-tight text-[var(--text-main)]">
+              CodeLens
+            </span>
+            <span className="text-[10px] font-mono uppercase text-[var(--text-muted)] bg-[var(--bg-elevated)] px-1.5 py-0.5 rounded border border-[var(--border-color)] ml-1.5">
+              AI
             </span>
           </div>
-          
-          <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-transparent dark:bg-gradient-to-r dark:from-cyan-400 dark:via-white dark:to-blue-400 dark:bg-clip-text">
-            CodeLens <span className="text-[11px] font-black uppercase text-blue-700 dark:text-cyan-300 bg-blue-100 dark:bg-dark-950 px-1.5 py-0.5 rounded-md border border-blue-200 dark:border-cyan-500/30 ml-0.5 tracking-wider">AI</span>
-          </span>
         </div>
-      </div>
 
-      {/* Center Controls: Language & Image OCR */}
-      <div className="flex items-center space-x-2">
+        <div className="h-4 w-[1px] bg-[var(--border-color)]" />
+
         {/* Language Selector */}
-        <div className="relative flex items-center bg-slate-100 dark:bg-dark-950 border border-slate-200 dark:border-dark-750 rounded-lg px-2.5 py-1 shadow-xs">
-          <Code2 className="w-4 h-4 text-blue-600 dark:text-brand-cyan mr-1.5" />
+        <div className="relative flex items-center">
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            className="bg-transparent text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer pr-2"
+            className="appearance-none bg-transparent hover:bg-[var(--accent-subtle)] text-xs font-mono font-medium text-[var(--text-main)] border border-[var(--border-color)] hover:border-[var(--text-muted)] rounded-[6px] pl-2.5 pr-6 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#5B6CFF]"
           >
             {languages.map((l) => (
-              <option key={l.id} value={l.id} className="bg-white dark:bg-dark-900 text-slate-800 dark:text-slate-200">
+              <option key={l.id} value={l.id} className="bg-[var(--bg-surface)] text-[var(--text-main)] font-mono">
                 {l.label} ({l.ext})
               </option>
             ))}
           </select>
+          <ChevronDown className="w-3 h-3 text-[var(--text-muted)] absolute right-2 pointer-events-none" />
         </div>
-
-        {/* OCR Image-to-Code Button */}
-        <button
-          onClick={onOpenOCR}
-          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-dark-850 hover:bg-slate-200 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-dark-700 hover:border-blue-400 dark:hover:border-brand-cyan/50 transition-all shadow-xs group cursor-pointer"
-          title="Upload or scan image of code"
-        >
-          <Camera className="w-3.5 h-3.5 text-blue-600 dark:text-brand-cyan group-hover:scale-110 transition-transform" />
-          <span className="hidden sm:inline">Image to Code</span>
-        </button>
       </div>
 
-      {/* Right Action Buttons */}
-      <div className="flex items-center space-x-2">
-        {/* Theme Switcher Button */}
+      {/* Center: Mode / Presets Selector */}
+      <div className="hidden md:flex items-center space-x-2">
+        {presets && presets.length > 0 && (
+          <div className="relative flex items-center">
+            <Layers className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 pointer-events-none" />
+            <select
+              value={activePreset || ''}
+              onChange={(e) => onSelectPreset && onSelectPreset(e.target.value)}
+              className="appearance-none bg-transparent hover:bg-[var(--accent-subtle)] text-xs font-sans text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-color)] hover:border-[var(--text-muted)] rounded-[6px] pl-7 pr-6 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#5B6CFF] max-w-[220px] truncate"
+              title="Load example preset"
+            >
+              <option value="" disabled className="bg-[var(--bg-surface)] text-[var(--text-muted)]">
+                Select Example Preset...
+              </option>
+              {presets.map((p) => (
+                <option key={p.id} value={p.id} className="bg-[var(--bg-surface)] text-[var(--text-main)]">
+                  {p.title}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-3 h-3 text-[var(--text-muted)] absolute right-2 pointer-events-none" />
+          </div>
+        )}
+      </div>
+
+      {/* Right: Actions & Run Button */}
+      <div className="flex items-center space-x-1.5 sm:space-x-2">
+        {/* OCR Image-to-Code Button (Ghost) */}
         <button
-          onClick={onToggleTheme}
-          className="p-1.5 rounded-lg bg-slate-100 dark:bg-dark-850 hover:bg-slate-200 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-dark-700 transition-all cursor-pointer"
-          title={theme === 'light' ? 'Switch to Dark Theme' : 'Switch to Light Theme'}
+          onClick={onOpenOCR}
+          className="p-1.5 rounded-[6px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--accent-subtle)] cursor-pointer"
+          title="Upload or scan image of code (OCR)"
         >
-          {theme === 'light' ? (
-            <Moon className="w-4 h-4 text-slate-700" />
-          ) : (
-            <Sun className="w-4 h-4 text-amber-400" />
-          )}
+          <Camera className="w-4 h-4" />
         </button>
 
-        {/* Deep AI Explainer Button */}
-        <button
-          onClick={onOpenExplain}
-          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-xs hover:shadow-blue-500/20 transition-all active:scale-95 cursor-pointer"
-          title="Generate deep AI code explanation & complexity report"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-yellow-300 animate-spin-slow" />
-          <span className="hidden md:inline">Deep AI Explain</span>
-          <span className="md:hidden">Explain</span>
-        </button>
-
-        {/* AI Debugger Button */}
+        {/* AI Debugger Button (Ghost) */}
         <button
           onClick={onOpenDebugger}
-          className={`relative flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer ${
+          className={`flex items-center space-x-1 px-2 py-1.5 rounded-[6px] text-xs font-medium cursor-pointer ${
             hasErrors
-              ? 'bg-red-50 dark:bg-red-500/20 text-red-600 dark:text-red-300 border-red-200 dark:border-red-500/50 hover:bg-red-100 dark:hover:bg-red-500/30 animate-pulse'
-              : 'bg-slate-100 dark:bg-dark-850 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-dark-700 hover:bg-slate-200 dark:hover:bg-dark-750'
+              ? 'text-[var(--status-error)] bg-[var(--status-error-bg)] border border-[var(--status-error-border)]'
+              : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--accent-subtle)]'
           }`}
-          title="Detect errors and 1-click auto fix"
+          title="AI Compiler & Runtime Debugger"
         >
-          <Bug className={`w-3.5 h-3.5 ${hasErrors ? 'text-red-500 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`} />
-          <span className="hidden lg:inline">AI Debugger</span>
-          {hasErrors && (
-            <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+          <Bug className="w-3.5 h-3.5" />
+          <span className="hidden lg:inline">Debug</span>
+          {hasErrors && issueCount > 0 && (
+            <span className="px-1 py-0.2 rounded text-[10px] font-mono font-semibold bg-[var(--status-error)] text-white">
               {issueCount}
             </span>
           )}
         </button>
 
-        {/* Share Button */}
+        {/* Deep AI Explainer Button (Secondary Outlined, NOT a loud gradient) */}
         <button
-          onClick={onOpenShare}
-          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-dark-850 hover:bg-slate-200 dark:hover:bg-dark-750 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-dark-700 transition-all cursor-pointer"
-          title="Generate shareable link"
+          onClick={onOpenExplain}
+          className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-[6px] text-xs font-medium text-[var(--text-main)] border border-[var(--border-color)] hover:border-[var(--text-muted)] hover:bg-[var(--accent-subtle)] cursor-pointer"
+          title="Generate algorithmic complexity & code explanation"
         >
-          <Share2 className="w-3.5 h-3.5 text-emerald-600 dark:text-brand-emerald" />
-          <span className="hidden sm:inline">Share</span>
+          <Sparkles className="w-3.5 h-3.5 text-[#5B6CFF]" />
+          <span className="hidden sm:inline">Explain</span>
         </button>
 
-        {/* Settings Button */}
+        {/* Share Button (Ghost) */}
+        <button
+          onClick={onOpenShare}
+          className="p-1.5 rounded-[6px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--accent-subtle)] cursor-pointer"
+          title="Share code and trace"
+        >
+          <Share2 className="w-4 h-4" />
+        </button>
+
+        {/* Settings Button (Ghost) */}
         <button
           onClick={onOpenSettings}
-          className="p-1.5 rounded-lg bg-slate-100 dark:bg-dark-850 hover:bg-slate-200 dark:hover:bg-dark-750 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-dark-750 transition-all cursor-pointer"
-          title="Settings"
+          className="p-1.5 rounded-[6px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--accent-subtle)] cursor-pointer"
+          title="Preferences & Settings"
         >
           <Settings className="w-4 h-4" />
         </button>
+
+        {/* Theme Switcher Button (Ghost) */}
+        <button
+          onClick={onToggleTheme}
+          className="p-1.5 rounded-[6px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--accent-subtle)] cursor-pointer"
+          title={theme === 'light' ? 'Switch to Dark Theme' : 'Switch to Light Theme'}
+        >
+          {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+        </button>
+
+        <div className="h-4 w-[1px] bg-[var(--border-color)] mx-1" />
+
+        {/* Primary Run / Stop Button */}
+        {isRunning ? (
+          <button
+            onClick={onResetCode}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-[6px] text-xs font-medium bg-[var(--status-error)] hover:opacity-90 text-white shadow-xs cursor-pointer active:scale-95"
+            title="Stop execution"
+          >
+            <Square className="w-3 h-3 fill-current" />
+            <span>Stop</span>
+          </button>
+        ) : (
+          <button
+            onClick={onRunCode}
+            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-[6px] text-xs font-medium bg-[#5B6CFF] hover:bg-[#4858EC] text-white shadow-xs cursor-pointer active:scale-95"
+            title="Execute code (Ctrl + Enter)"
+          >
+            <Play className="w-3 h-3 fill-current" />
+            <span>Run</span>
+          </button>
+        )}
       </div>
     </header>
   );

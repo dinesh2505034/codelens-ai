@@ -1,17 +1,77 @@
+@import 'katex/dist/katex.min.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Light Theme */
+  --bg-app: #FFFFFF;
+  --bg-surface: #F7F8FA;
+  --bg-elevated: #FFFFFF;
+  --border-color: #E3E6EB;
+  --text-main: #14171C;
+  --text-muted: #5F6875;
+  --accent: #5B6CFF;
+  --accent-hover: #4858EC;
+  --accent-active: #3848DC;
+  --accent-subtle: rgba(91, 108, 255, 0.08);
+  --accent-border: rgba(91, 108, 255, 0.28);
+  --accent-ring: rgba(91, 108, 255, 0.4);
+
+  --status-success: #16A34A;
+  --status-success-bg: rgba(22, 163, 74, 0.08);
+  --status-success-border: rgba(22, 163, 74, 0.25);
+
+  --status-error: #DC2626;
+  --status-error-bg: rgba(220, 38, 38, 0.08);
+  --status-error-border: rgba(220, 38, 38, 0.25);
+
+  --status-warning: #D97706;
+  --status-warning-bg: rgba(217, 119, 6, 0.08);
+  --status-warning-border: rgba(217, 119, 6, 0.25);
+}
+
+.dark {
+  /* Dark Theme */
+  --bg-app: #0B0D10;
+  --bg-surface: #12151A;
+  --bg-elevated: #181C22;
+  --border-color: #232830;
+  --text-main: #E6E8EB;
+  --text-muted: #8B93A0;
+  --accent: #5B6CFF;
+  --accent-hover: #6E7DFF;
+  --accent-active: #808EFF;
+  --accent-subtle: rgba(91, 108, 255, 0.12);
+  --accent-border: rgba(91, 108, 255, 0.32);
+  --accent-ring: rgba(91, 108, 255, 0.5);
+
+  --status-success: #22C55E;
+  --status-success-bg: rgba(34, 197, 94, 0.12);
+  --status-success-border: rgba(34, 197, 94, 0.25);
+
+  --status-error: #EF4444;
+  --status-error-bg: rgba(239, 68, 68, 0.12);
+  --status-error-border: rgba(239, 68, 68, 0.25);
+
+  --status-warning: #F59E0B;
+  --status-warning-bg: rgba(245, 158, 11, 0.12);
+  --status-warning-border: rgba(245, 158, 11, 0.25);
+}
+
 @layer base {
   body {
-    @apply bg-slate-100 text-slate-900 dark:bg-dark-950 dark:text-slate-100 transition-colors duration-200;
+    background-color: var(--bg-app);
+    color: var(--text-main);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 }
 
-/* Custom Sleek Scrollbars for Light & Dark */
+/* Engineering-Grade Minimal Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -19,48 +79,51 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--border-color);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--text-muted);
 }
 
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+/* Fast, calm transitions on interactive elements - no bouncy animations */
+button, input, select, textarea {
+  transition: background-color 140ms ease-out, border-color 140ms ease-out, color 140ms ease-out, opacity 140ms ease-out;
 }
 
-/* Custom Fade & Animation Utilities */
+/* Visible keyboard focus rings */
+button:focus-visible, 
+input:focus-visible, 
+select:focus-visible, 
+textarea:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 1px !important;
+}
+
+/* Monaco Active Execution Step Highlighting - VS Code Engineering Style */
+.monaco-active-line-bg {
+  background: var(--accent-subtle) !important;
+  border-left: 2px solid var(--accent) !important;
+}
+
+.monaco-active-glyph {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%235B6CFF'%3E%3Cpolygon points='6 4 20 12 6 20 6 4'/%3E%3C/svg%3E") no-repeat center center;
+  background-size: 10px 10px;
+}
+
+/* Subtle fade in for modals and tooltips */
 @keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.98); }
+  from { opacity: 0; transform: scale(0.99); }
   to { opacity: 1; transform: scale(1); }
 }
 
 .animate-fadeIn {
-  animation: fadeIn 0.15s ease-out forwards;
+  animation: fadeIn 140ms ease-out forwards;
 }
 
-.animate-spin-slow {
-  animation: spin 3s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* Monaco Active Execution Step Highlighting */
-.monaco-active-line-bg {
-  background: rgba(16, 185, 129, 0.2) !important;
-  border-left: 3px solid #10b981 !important;
-}
-
-.monaco-active-glyph {
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2310b981'%3E%3Cpolygon points='6 4 20 12 6 20 6 4'/%3E%3C/svg%3E") no-repeat center center;
-  background-size: 11px 11px;
+/* KaTeX inline math styling */
+.katex {
+  font-size: 1.05em;
+  color: inherit;
 }

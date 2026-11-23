@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Share2 } from 'lucide-react';
+import { Share2 } from 'lucide-react';
 import Navbar from './components/Navbar';
 import CodeEditor from './components/CodeEditor';
 import ExecutionControls from './components/ExecutionControls';
@@ -7,6 +7,7 @@ import OutputTerminal from './components/OutputTerminal';
 import VisualStateMemory from './components/VisualStateMemory';
 import StepExplanationCard from './components/StepExplanationCard';
 import EmptyVisualizerState from './components/EmptyVisualizerState';
+import StatusBar from './components/StatusBar';
 import DeepExplanationModal from './components/DeepExplanationModal';
 import DebuggerPanel from './components/DebuggerPanel';
 import ImageUploadModal from './components/ImageUploadModal';
@@ -28,16 +29,26 @@ export default function App() {
   const [activePreset, setActivePreset] = useState(defaultPreset.id);
   const [customInputs, setCustomInputs] = useState('');
 
-  // Theme state: Default to 'light' with toggle support
-  const [theme, setTheme] = useState(() => localStorage.getItem('omnicode_theme') || 'light');
+  // Theme state: support dark / light with persistence
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('codelens_theme') || 
+           localStorage.getItem('omnicode_theme') || 
+           'dark';
+  });
 
   // Step Execution & Trace state
-  const [hasExecuted, setHasExecuted] = useState(false); // Only start execution when user presses Run!
+  const [hasExecuted, setHasExecuted] = useState(false);
   const [traceData, setTraceData] = useState(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [isRunning, setIsRunning] = useState(false);
+
+  // Tab & Divider state for flush panels
+  const [activeRightTab, setActiveRightTab] = useState('visualizer');
+  const [splitRatio, setSplitRatio] = useState(50);
+  const [isDragging, setIsDragging] = useState(false);
+  const containerRef = useRef(null);
 
   // AI Modal states
   const [isExplainOpen, setIsExplainOpen] = useState(false);
@@ -63,12 +74,43 @@ export default function App() {
     } else {
       root.classList.remove('dark');
     }
-    localStorage.setItem('omnicode_theme', theme);
+    localStorage.setItem('codelens_theme', theme);
   }, [theme]);
 
   const handleToggleTheme = () => {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   };
+
+  // Draggable divider mouse listener
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isDragging || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const newRatio = ((e.clientX - rect.left) / rect.width) * 100;
+      setSplitRatio(Math.max(25, Math.min(75, newRatio)));
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+    } else {
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+  }, [isDragging]);
 
   // Load shared session or query params if present in URL
   useEffect(() => {
@@ -116,7 +158,7 @@ export default function App() {
     }
   }, [code, language, customInputs]);
 
-  // Initial background debug check only (does NOT execute code on mount)
+  // Initial background debug check
   useEffect(() => {
     runBackgroundDebugCheck(code, language);
   }, []);
@@ -251,17 +293,26 @@ export default function App() {
     setCurrentStepIndex(targetIdx);
   };
 
-  // Explicit Run Handler: Execution ONLY starts when user clicks Run!
-  const handleRun = async () => {
+  // Explicit Run Handler
+  const handleRun = useCallback(async () => {
     setHasExecuted(true);
     setCustomInputs('');
     setIsPlaying(true);
+    setActiveRightTab('visualizer');
     await runExecutionTrace(code, language, '', 0);
-  };
+  }, [runExecutionTrace, code, language]);
 
-  const handleCustomInputChange = (newInputs) => {
-    setCustomInputs(newInputs);
-  };
+  // Global Ctrl + Enter / Cmd + Enter Keyboard Shortcut
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleRun();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleRun]);
 
   const handleInteractiveSubmit = (inputVal) => {
     const updatedInputs = customInputs ? `${customInputs}\n${inputVal}` : inputVal;
@@ -321,12 +372,22 @@ export default function App() {
     runBackgroundDebugCheck(newCode, detectedLang || language);
   };
 
+  const lineCount = code ? code.split('\n').length : 1;
+  const executionStatus = isRunning 
+    ? 'Running' 
+    : hasExecuted 
+      ? (currentStep.hasError ? 'Error' : 'Done') 
+      : 'Ready';
+
   return (
-    <div className="flex flex-col h-screen bg-slate-100 dark:bg-dark-950 text-slate-800 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
-      {/* Top Navbar */}
+    <div className="flex flex-col h-screen w-screen bg-[var(--bg-app)] text-[var(--text-main)] overflow-hidden font-sans transition-colors duration-150">
+      {/* 1. Header Toolbar (48px) */}
       <Navbar
         language={language}
         setLanguage={handleLanguageChange}
+        activePreset={activePreset}
+        onSelectPreset={handleSelectPreset}
+        presets={SAMPLE_PRESETS}
         onOpenOCR={() => setIsOCROpen(true)}
         onOpenExplain={handleOpenDeepExplain}
         onOpenDebugger={handleOpenDebugger}
@@ -341,10 +402,13 @@ export default function App() {
         onToggleTheme={handleToggleTheme}
       />
 
-      {/* Main Split Layout */}
-      <main className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-2 p-2 overflow-hidden">
+      {/* 2. Flush Split Main Panels */}
+      <main ref={containerRef} className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
         {/* Left Pane: Code Editor */}
-        <section className="h-full overflow-hidden flex flex-col">
+        <section 
+          style={{ width: `${splitRatio}%` }}
+          className="h-full flex flex-col min-w-[280px] overflow-hidden max-lg:!w-full max-lg:h-1/2"
+        >
           <CodeEditor
             code={code}
             onChange={handleCodeChange}
@@ -358,11 +422,27 @@ export default function App() {
           />
         </section>
 
+        {/* Draggable 1px Divider */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          onMouseDown={() => setIsDragging(true)}
+          className={`hidden lg:flex w-[1px] relative cursor-col-resize group select-none transition-colors ${
+            isDragging ? 'bg-[#5B6CFF]' : 'bg-[var(--border-color)] hover:bg-[#5B6CFF]'
+          }`}
+          title="Drag to resize panels"
+        >
+          <div className="absolute inset-y-0 -left-1 -right-1 z-20 cursor-col-resize" />
+        </div>
+
         {/* Right Pane: Visualizer & Output */}
-        <section className="h-full flex flex-col bg-white dark:bg-dark-900 border border-slate-200 dark:border-dark-750 rounded-xl overflow-hidden shadow-md dark:shadow-xl transition-colors">
+        <section 
+          style={{ width: `${100 - splitRatio}%` }}
+          className="h-full flex flex-col min-w-[300px] overflow-hidden max-lg:!w-full max-lg:h-1/2 max-lg:border-t border-[var(--border-color)] bg-[var(--bg-surface)]"
+        >
           {hasExecuted ? (
             <>
-              {/* 1. Header with Execution Playback Controls */}
+              {/* Header with Execution Controls & Tabs */}
               <ExecutionControls
                 currentStep={currentStepIndex + 1}
                 totalSteps={totalSteps}
@@ -375,53 +455,86 @@ export default function App() {
                 onSeekStep={handleSeekStep}
                 playbackSpeed={playbackSpeed}
                 onChangeSpeed={setPlaybackSpeed}
-                onOpenShare={() => setIsShareOpen(true)}
+                activeTab={activeRightTab}
+                setActiveTab={setActiveRightTab}
               />
 
-              {/* 2. Output Terminal Box */}
-              <OutputTerminal 
-                output={currentStep.output}
-                isWaitingForInput={currentStep.isWaitingForInput || traceData?.isWaitingForInput}
-                inputPrompt={currentStep.inputPrompt || traceData?.inputPrompt || '>'}
-                onSubmitInput={handleInteractiveSubmit}
-                executionTime={traceData?.executionTime || '0.015s'}
-                exitCode={traceData?.exitCode || 0}
-              />
+              {/* Tab 1: Visualizer (Visual Memory + Step Explanation + Output preview) */}
+              {activeRightTab === 'visualizer' && (
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[var(--bg-surface)]">
+                  <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+                    <VisualStateMemory
+                      variables={currentStep.variables}
+                      changedVar={currentStep.changedVar}
+                      callStack={currentStep.callStack}
+                      dataStructures={currentStep.dataStructures}
+                    />
+                    <StepExplanationCard
+                      activeLine={currentStep.line}
+                      lineCode={currentStep.lineCode}
+                      explanation={currentStep.explanation}
+                      statusText={currentStep.statusText}
+                      currentStep={currentStepIndex + 1}
+                      totalSteps={totalSteps}
+                      hasError={currentStep.hasError}
+                      errorDiagnostic={currentStep.errorDiagnostic || null}
+                    />
+                  </div>
+                  {(currentStep.output || currentStep.isWaitingForInput || traceData?.isWaitingForInput) && (
+                    <div className="h-44 border-t border-[var(--border-color)] flex flex-col shrink-0">
+                      <OutputTerminal 
+                        output={currentStep.output}
+                        isWaitingForInput={currentStep.isWaitingForInput || traceData?.isWaitingForInput}
+                        inputPrompt={currentStep.inputPrompt || traceData?.inputPrompt || '>'}
+                        onSubmitInput={handleInteractiveSubmit}
+                        executionTime={traceData?.executionTime || '0.015s'}
+                        exitCode={traceData?.exitCode || 0}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
-              {/* 3. Visual State & Memory Box */}
-              <VisualStateMemory
-                variables={currentStep.variables}
-                changedVar={currentStep.changedVar}
-                callStack={currentStep.callStack}
-                dataStructures={currentStep.dataStructures}
-              />
+              {/* Tab 2: Variables Only */}
+              {activeRightTab === 'variables' && (
+                <div className="flex-1 min-h-0 overflow-y-auto bg-[var(--bg-surface)]">
+                  <VisualStateMemory
+                    variables={currentStep.variables}
+                    changedVar={currentStep.changedVar}
+                    callStack={currentStep.callStack}
+                    dataStructures={currentStep.dataStructures}
+                  />
+                </div>
+              )}
 
-              {/* 4. Explanation Card */}
-              <StepExplanationCard
-                activeLine={currentStep.line}
-                lineCode={currentStep.lineCode}
-                explanation={currentStep.explanation}
-                statusText={currentStep.statusText}
-                currentStep={currentStepIndex + 1}
-                totalSteps={totalSteps}
-                hasError={currentStep.hasError}
-                errorDiagnostic={currentStep.errorDiagnostic || null}
-              />
+              {/* Tab 3: Output Terminal Only */}
+              {activeRightTab === 'output' && (
+                <div className="flex-1 min-h-0 flex flex-col bg-[var(--bg-surface)]">
+                  <OutputTerminal 
+                    output={currentStep.output}
+                    isWaitingForInput={currentStep.isWaitingForInput || traceData?.isWaitingForInput}
+                    inputPrompt={currentStep.inputPrompt || traceData?.inputPrompt || '>'}
+                    onSubmitInput={handleInteractiveSubmit}
+                    executionTime={traceData?.executionTime || '0.015s'}
+                    exitCode={traceData?.exitCode || 0}
+                  />
+                </div>
+              )}
             </>
           ) : (
-            /* Clean Idle State matching reference screenshot */
-            <div className="flex flex-col h-full bg-white dark:bg-dark-900 transition-colors">
-              <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 dark:bg-dark-850 border-b border-slate-200 dark:border-dark-750 select-none">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 tracking-wide font-sans">
+            /* Clean Idle State */
+            <div className="flex flex-col h-full bg-[var(--bg-surface)]">
+              <div className="h-9 px-3 bg-[var(--bg-surface)] border-b border-[var(--border-color)] flex items-center justify-between select-none">
+                <span className="text-xs font-mono uppercase tracking-wider text-[var(--text-muted)] font-medium">
                   Output & Visualizer
                 </span>
-                <div className="flex items-center space-x-2 text-slate-400">
+                <div className="flex items-center space-x-1">
                   <button 
                     onClick={() => setIsShareOpen(true)} 
-                    className="p-1 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer" 
-                    title="Share"
+                    className="p-1 rounded-[6px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--accent-subtle)] transition-colors cursor-pointer" 
+                    title="Share Code"
                   >
-                    <Share2 className="w-4 h-4" />
+                    <Share2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -432,7 +545,18 @@ export default function App() {
         </section>
       </main>
 
-      {/* Modals & Drawers */}
+      {/* 3. Bottom Status Bar (24px) */}
+      <StatusBar
+        language={language}
+        lineCount={lineCount}
+        status={executionStatus}
+        executionTime={traceData?.executionTime || '-'}
+        currentStep={hasExecuted ? currentStepIndex + 1 : null}
+        totalSteps={hasExecuted ? totalSteps : null}
+        hasError={hasExecuted && Boolean(currentStep.hasError || currentStep.errorDiagnostic)}
+      />
+
+      {/* Modals & Dialogs */}
       <DeepExplanationModal
         isOpen={isExplainOpen}
         onClose={() => setIsExplainOpen(false)}
