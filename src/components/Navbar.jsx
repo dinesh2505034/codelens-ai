@@ -1,4 +1,5 @@
 import React from 'react';
+import BrandLogo from './BrandLogo';
 import { 
   Code2, 
   Sparkles, 
@@ -44,24 +45,8 @@ export default function Navbar({
     <header className="h-12 w-full bg-[var(--bg-surface)] border-b border-[var(--border-color)] px-3 flex items-center justify-between select-none sticky top-0 z-30 transition-colors">
       {/* Left: Brand Logo + Language Selector */}
       <div className="flex items-center space-x-3">
-        {/* Brand Logo - Minimal, Calm, Engineering-Grade */}
-        <div className="flex items-center space-x-2 text-[var(--text-main)]">
-          <div className="w-6 h-6 rounded-[6px] bg-[#5B6CFF] flex items-center justify-center text-white shadow-xs">
-            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <circle cx="11" cy="11" r="7" />
-              <path d="M21 21L16.5 16.5" strokeLinecap="round" />
-              <path d="M9 11L11 13L14 9" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <div className="flex items-center">
-            <span className="font-semibold text-sm tracking-tight text-[var(--text-main)]">
-              CodeLens
-            </span>
-            <span className="text-[10px] font-mono uppercase text-[var(--text-muted)] bg-[var(--bg-elevated)] px-1.5 py-0.5 rounded border border-[var(--border-color)] ml-1.5">
-              AI
-            </span>
-          </div>
-        </div>
+        {/* Official Brand Logo */}
+        <BrandLogo size={24} textClassName="text-sm font-semibold" />
 
         <div className="h-4 w-[1px] bg-[var(--border-color)]" />
 
